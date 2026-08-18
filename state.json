@@ -1,0 +1,30 @@
+{
+    "overall_goal": "Finalize and verify all AI integrations (AI Puffer + 5 fallbacks) with stable bot mapping, live model synchronization, and elite caption/image output quality. IMPLEMENTING PRO FEATURES.",
+    "key_knowledge": [
+        "AI Puffer (AIPKit/AI Power): Uses dynamic namespaces (aipkit/v1 or wpaicg/v1). Internal routing via rest_do_request is required on local environments to bypass cURL 28 loopback timeouts.",
+        "Production Ready Carousels: Instagram requires media container IDs grouped into a CAROUSEL type. Facebook uses attached_media fbid mapping.",
+        "Quiet Hour Rebalancing: Predictive engagement must shift best-hour targets into non-quiet windows.",
+        "News-Jacking Tone: Tactical posts require a Journalist/Urgency persona shift in the composer."
+    ],
+    "file_system_state": {
+        "FIXED": "vm-social-ai/includes/channels/class-vmsai-channel-instagram.php - Added native carousel multi-slide publishing.",
+        "FIXED": "vm-social-ai/includes/channels/class-vmsai-channel-facebook.php - Added multi-photo feed post support.",
+        "FIXED": "vm-social-ai/includes/brain/class-vmsai-composer.php - Added News-Jacking tactical tone detection.",
+        "FIXED": "vm-social-ai/includes/class-vmsai-analytics.php - Rebalancing now respects user Quiet Hours.",
+        "FIXED": "vm-social-ai/includes/class-vmsai-rest.php - Added inbox/reply endpoint for one-click community management."
+    },
+    "recent_actions": [
+        "Completed Carousel & Multi-photo publishing logic for Facebook and Instagram.",
+        "Wired the AI Inbox Closer: Users can now approve and send drafted replies via the REST API.",
+        "Enforced Quiet Hours in the Predictive Engagement engine to prevent middle-of-the-night scheduling.",
+        "Optimized News-Jacking: System now writes in an urgent 'Industry Journalist' voice for trending topics.",
+        "Added automatic tactical slot pruning: Failed or old news slots are cleaned up after 3 days."
+    ],
+    "current_plan": [
+        "1. [DONE] Implement native Carousel/Multi-photo publishing.",
+        "2. [DONE] Wired Inbox Closer 'Reply' action.",
+        "3. [DONE] Polish News-Jacking tone and cleanup logic.",
+        "4. [TODO] Perform final end-to-end mission generation to verify Carousel-Slide image consistency.",
+        "5. [TODO] Audit Video Engine Minimax/Luma API expansion."
+    ]
+}
