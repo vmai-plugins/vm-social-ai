@@ -245,6 +245,9 @@ class VMSAI_Admin {
 			case 'rag':
 				$this->save_rag();
 				break;
+			case 'updates':
+				$this->save_updates();
+				break;
 		}
 
 		// Determine redirect tab and hash.
@@ -481,6 +484,25 @@ class VMSAI_Admin {
 		update_option( VMSAI_RAG::OPTION, array_values( $feeds ) );
 
 		( new VMSAI_RAG() )->sync();
+	}
+
+	/**
+	 * Persist GitHub access settings.
+	 *
+	 * @return void
+	 */
+	private function save_updates() {
+		$post = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification
+
+		if ( isset( $post['github_token'] ) ) {
+			$token = trim( (string) $post['github_token'] );
+			if ( ! preg_match( '/^•+$/', $token ) ) {
+				VMSAI_Settings::update_credentials( array( 'github_token' => $token ) );
+			}
+		}
+
+		// Invalidate cached update info so next load checks with new token if supplied
+		delete_transient( VMSAI_Github_Updater::TRANSIENT_KEY );
 	}
 
 	/**
