@@ -48,6 +48,13 @@ class VMSAI_Plugin {
 	private $video_engine = null;
 
 	/**
+	 * GitHub updater.
+	 *
+	 * @var VMSAI_Github_Updater|null
+	 */
+	private $updater = null;
+
+	/**
 	 * Accessor.
 	 *
 	 * @return VMSAI_Plugin
@@ -69,6 +76,7 @@ class VMSAI_Plugin {
 			VMSAI_Install::maybe_upgrade();
 			VMSAI_Install::register_recovery();
 			( new VMSAI_Admin() )->register();
+			VMSAI_Github_Updater::instance();
 		}
 
 		( new VMSAI_Scheduler() )->register();
@@ -83,6 +91,18 @@ class VMSAI_Plugin {
 		add_action( 'vmsai_sync_city_insights', array( 'VMSAI_Research', 'sync_city_insights' ) );
 
 		add_filter( 'cron_schedules', array( 'VMSAI_Install', 'add_schedules' ) );
+	}
+
+	/**
+	 * Lazily built GitHub updater.
+	 *
+	 * @return VMSAI_Github_Updater
+	 */
+	public function updater() {
+		if ( null === $this->updater ) {
+			$this->updater = VMSAI_Github_Updater::instance();
+		}
+		return $this->updater;
 	}
 
 	/**

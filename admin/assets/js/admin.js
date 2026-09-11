@@ -870,4 +870,88 @@ jQuery( function ( $ ) {
 			toast( 'Engine run complete.' );
 		} );
 	};
+
+	/* ---------- GitHub Updates ---------- */
+
+	actions[ 'check-github-update' ] = function ( button ) {
+		busy( button, true );
+		var $spinner = $( '#vmsai-update-spinner' );
+		var $progress = $( '#vmsai-update-progress-text' );
+		if ( $spinner.length ) {
+			$progress.text( 'Checking GitHub repository…' );
+			$spinner.css( 'display', 'inline-flex' );
+		}
+
+		api( '/system/check-update', 'POST', { force: true } ).then( function ( result ) {
+			busy( button, false );
+			if ( $spinner.length ) $spinner.hide();
+
+			if ( ! result.ok ) {
+				toast( result.message || 'Could not check updates from GitHub.', true );
+				return;
+			}
+
+			if ( $( '#vmsai-installed-ver' ).length ) $( '#vmsai-installed-ver' ).text( result.current_version );
+			if ( $( '#vmsai-latest-ver' ).length ) $( '#vmsai-latest-ver' ).text( result.latest_version );
+			if ( $( '#vmsai-last-checked-time' ).length ) $( '#vmsai-last-checked-time' ).text( result.last_checked || 'Just now' );
+
+			var $badge = $( '#vmsai-update-status-badge' );
+			if ( result.has_update ) {
+				if ( $badge.length ) {
+					$badge.html( '<span class="vmsai-chip" style="background: rgba(201,162,39,0.2); color: var(--gold); border: 1px solid var(--gold); padding: 4px 10px; font-weight: 600;">⚡ New Version Available (v' + cfg.esc( result.latest_version ) + ')</span>' );
+				}
+				if ( result.release_notes ) {
+					$( '#vmsai-release-notes-body' ).text( result.release_notes );
+					$( '#vmsai-release-notes-panel' ).fadeIn();
+				}
+				toast( 'Update available: v' + result.latest_version + ' on GitHub!' );
+			} else {
+				if ( $badge.length ) {
+					$badge.html( '<span class="vmsai-chip" style="background: rgba(111,168,138,0.2); color: var(--green); border: 1px solid var(--green); padding: 4px 10px; font-weight: 600;">✓ Up to date</span>' );
+				}
+				toast( 'VM Social AI Pro is up to date (v' + result.current_version + ').' );
+			}
+		} ).catch( function ( err ) {
+			busy( button, false );
+			if ( $spinner.length ) $spinner.hide();
+			toast( err.message || 'GitHub check failed.', true );
+		} );
+	};
+
+	actions[ 'run-github-update' ] = function ( button ) {
+		if ( ! confirm( 'Install update directly from GitHub repository now?' ) ) {
+			return;
+		}
+
+		busy( button, true );
+		var $checkBtn = $( '#vmsai-btn-check-update' );
+		if ( $checkBtn.length ) $checkBtn.prop( 'disabled', true );
+
+		var $spinner = $( '#vmsai-update-spinner' );
+		var $progress = $( '#vmsai-update-progress-text' );
+		if ( $spinner.length ) {
+			$progress.text( 'Downloading & installing update from GitHub…' );
+			$spinner.css( 'display', 'inline-flex' );
+		}
+
+		api( '/system/github-update', 'POST', {} ).then( function ( result ) {
+			if ( result.ok ) {
+				if ( $progress.length ) $progress.text( 'Update installed! Reloading…' );
+				toast( result.message || 'Updated successfully!' );
+				setTimeout( function () {
+					window.location.reload();
+				}, 1500 );
+			} else {
+				busy( button, false );
+				if ( $checkBtn.length ) $checkBtn.prop( 'disabled', false );
+				if ( $spinner.length ) $spinner.hide();
+				toast( result.message || 'Update failed.', true );
+			}
+		} ).catch( function ( err ) {
+			busy( button, false );
+			if ( $checkBtn.length ) $checkBtn.prop( 'disabled', false );
+			if ( $spinner.length ) $spinner.hide();
+			toast( err.message || 'Update failed.', true );
+		} );
+	};
 } );

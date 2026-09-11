@@ -13,7 +13,7 @@ $vmsai_video  = vmsai()->video_engine();
 
 $vmsai_chain  = (array) VMSAI_Settings::get( 'text_chain', array() );
 $vmsai_ichain = (array) VMSAI_Settings::get( 'image_chain', array() );
-$vmsai_vchain = (array) VMSAI_Settings::get( 'video_chain', array( 'aipuffer', 'minimax', 'luma', 'pollinations', 'pexels' ) );
+$vmsai_vchain = (array) VMSAI_Settings::get( 'video_chain', array( 'aipuffer', 'omniroute', 'minimax', 'luma', 'pollinations', 'pexels' ) );
 
 $vmsai_models = (array) VMSAI_Settings::get( 'text_model', array() );
 $vmsai_imodel = (array) VMSAI_Settings::get( 'image_model', array() );
@@ -51,6 +51,10 @@ $vmsai_creds = array(
 		'comfyui_workflow' => array( __( 'Workflow JSON (API format)', 'vm-social-ai-pro' ), 'textarea', __( 'Export from ComfyUI with "Save (API format)". Use {{prompt}}, {{negative}}, {{width}}, {{height}} and {{seed}} where the values should go.', 'vm-social-ai-pro' ) ),
 	),
 	'pexels'       => array( 'pexels_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'Used as the last resort so a post never ships without an image.', 'vm-social-ai-pro' ) ) ),
+	'omniroute'    => array(
+		'omniroute_url' => array( __( 'OmniRoute URL', 'vm-social-ai-pro' ), 'url', __( 'Your self-hosted OmniRoute instance URL.', 'vm-social-ai-pro' ) ),
+		'omniroute_key' => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'The API key configured in your OmniRoute instance.', 'vm-social-ai-pro' ) ),
+	),
 	'minimax'      => array( 'minimax_key' => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From platform.minimaxi.com. High-fidelity cinematic video.', 'vm-social-ai-pro' ) ) ),
 	'luma'         => array( 'luma_key'    => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From lumalabs.ai. High-end Dream Machine video generation.', 'vm-social-ai-pro' ) ) ),
 	'heygen'       => array(
@@ -348,9 +352,13 @@ $vmsai_has_body = function ( $slug, $model_list ) use ( $vmsai_creds, &$vmsai_re
 					// Usable either with an explicit key or with an AIPKit
 					// install on this same site, which needs no key at all.
 					$vmsai_is_ready = VMSAI_Video_Engine::aipuffer_ready();
-				} elseif ( in_array($vmsai_slug, array('minimax', 'luma', 'pexels', 'svd', 'cogvideox')) ) {
-					$key_field = ('svd' === $vmsai_slug) ? 'svd_url' : ( ('cogvideox' === $vmsai_slug) ? 'hf_token' : $vmsai_slug . '_key' );
-					$vmsai_is_ready = ! empty( VMSAI_Settings::credential( $key_field ) );
+				} elseif ( in_array($vmsai_slug, array('minimax', 'luma', 'pexels', 'svd', 'cogvideox', 'omniroute')) ) {
+					if ( 'omniroute' === $vmsai_slug ) {
+						$vmsai_is_ready = ! empty( VMSAI_Settings::credential( 'omniroute_key' ) ) && ! empty( VMSAI_Settings::credential( 'omniroute_url' ) );
+					} else {
+						$key_field = ('svd' === $vmsai_slug) ? 'svd_url' : ( ('cogvideox' === $vmsai_slug) ? 'hf_token' : $vmsai_slug . '_key' );
+						$vmsai_is_ready = ! empty( VMSAI_Settings::credential( $key_field ) );
+					}
 				}
 
 				// Fall back to the provider's known models when nothing has

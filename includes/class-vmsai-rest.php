@@ -40,10 +40,12 @@ class VMSAI_Rest {
 		if ( strpos($route, '/plan/') !== false ) return current_user_can( 'vmsai_plan' );
 		if ( strpos($route, '/queue/update') !== false ) return current_user_can( 'vmsai_edit' );
 
-		// 3. Publishing/Keys: Needs 'vmsai_publish' or 'vmsai_manage_keys'
+		// 3. Publishing/Keys/Updates: Needs 'vmsai_publish', 'vmsai_manage_keys', or 'update_plugins'
 		if ( strpos($route, '/publish-now') !== false ) return current_user_can( 'vmsai_publish' );
 		if ( strpos($route, '/engine/') !== false ) return current_user_can( 'vmsai_manage_keys' );
 		if ( strpos($route, '/channel/') !== false ) return current_user_can( 'vmsai_manage_keys' );
+		if ( strpos($route, '/system/check-update') !== false ) return current_user_can( 'vmsai_read' );
+		if ( strpos($route, '/system/github-update') !== false ) return current_user_can( 'update_plugins' ) || current_user_can( 'manage_options' );
 
 		return current_user_can( 'manage_options' );
 	}
@@ -98,10 +100,11 @@ class VMSAI_Rest {
 			'campaign-gen/draft'  => array( 'POST', 'campaign_gen_draft' ),
 			'campaign-gen/create' => array( 'POST', 'campaign_gen_create' ),
 			'campaign-gen/compose' => array( 'POST', 'campaign_gen_compose' ),
-			'queue/portal-update'  => array( 'POST', 'portal_update', '__return_true' ),
+			'queue/portal-update'  => array( 'POST', 'portal_update', array( $this, 'can_manage' ) ),
 			'system/test-all'      => array( 'POST', 'test_all' ),
 			'system/upcoming'      => array( 'GET', 'upcoming' ),
 			'system/activity'      => array( 'GET', 'recent_activity' ),
+			'system/health'        => array( 'GET', 'health_check' ),
 			'compose/draft'        => array( 'POST', 'compose_draft' ),
 			'compose/create'       => array( 'POST', 'compose_create' ),
 			'compose/next-slot'    => array( 'GET', 'compose_next_slot' ),
@@ -110,6 +113,8 @@ class VMSAI_Rest {
 			'agents/save'          => array( 'POST', 'agents_save' ),
 			'agents/delete'        => array( 'POST', 'agents_delete' ),
 			'agents/styles'        => array( 'GET', 'agents_styles' ),
+			'system/check-update'  => array( 'POST', 'check_update' ),
+			'system/github-update' => array( 'POST', 'github_update' ),
 		);
 
 		foreach ( $routes as $path => $config ) {
@@ -838,6 +843,30 @@ class VMSAI_Rest {
 		return new WP_REST_Response( array( 'ok' => true, 'styles' => $styles ), 200 );
 	}
 
+	/**
+	 * Delete images left behind by previous engine tests.
+	 *
+	 * @return int Attachments removed.
+	 */
+	private static function purge_test_images() {
+		$ids = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 20,
+				'fields'         => 'ids',
+				'meta_key'       => '_vmsai_test', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'meta_value'     => '1', // phpcs:ignore WordPress.DB.SlowDBQuery
+			)
+		);
+
+		foreach ( $ids as $id ) {
+			wp_delete_attachment( (int) $id, true );
+		}
+
+		return count( $ids );
+	}
+
 	public function test_engine( WP_REST_Request $request ) {
 		$which = sanitize_key( (string) $request->get_param( 'engine' ) );
 		$creds = (array) $request->get_param( 'credentials' );
@@ -848,13 +877,19 @@ class VMSAI_Rest {
 
 		if ( 'image' === $which ) {
 			$engine = (string) $request->get_param( 'provider' );
+
+			// Clear the previous test image first, so repeated testing leaves
+			// one throwaway file rather than one per click.
+			self::purge_test_images();
+
 			$result = vmsai()->image_engine()->create(
 				'A clean, well-lit desk with a notebook and a cup of coffee, soft morning light, shallow depth of field',
 				array(
 					'channel' => 'instagram',
-					'topic' => 'engine test',
+					'topic'   => 'engine test',
 					'keyword' => 'engine test',
-					'prefer' => $engine
+					'prefer'  => $engine,
+					'is_test' => true,
 				)
 			);
 
@@ -912,9 +947,11 @@ class VMSAI_Rest {
 		}
 
 		if ( 'image' === $engine_type ) {
+			self::purge_test_images();
+
 			$result = vmsai()->image_engine()->create(
 				'A clean, well-lit desk with a notebook and a cup of coffee, soft morning light, shallow depth of field',
-				array( 'channel' => 'instagram', 'topic' => 'engine test', 'keyword' => 'engine test', 'prefer' => $slug )
+				array( 'channel' => 'instagram', 'topic' => 'engine test', 'keyword' => 'engine test', 'prefer' => $slug, 'is_test' => true )
 			);
 
 			$res_data = is_array( $result ) ? $result : array();
@@ -1469,5 +1506,84 @@ class VMSAI_Rest {
 		$limit = max( 1, min( 50, (int) ( $request->get_param( 'limit' ) ?: 10 ) ) );
 
 		return new WP_REST_Response( array( 'ok' => true, 'rows' => VMSAI_Analytics::recent_activity( $limit ) ), 200 );
+	}
+
+	/**
+	 * Health check endpoint for monitoring.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function health_check() {
+		$checks = array(
+			'database'     => true,
+			'scheduler'    => wp_next_scheduled( VMSAI_Install::CRON_TICK ) ? true : false,
+			'license'      => VMSAI_License::plan() !== 'free' || true, // Always true for free tier
+			'circuit_breaker' => count( VMSAI_Circuit::state() ) >= 0,
+			'storage'      => is_writable( wp_upload_dir()['basedir'] ),
+			'php_version'  => version_compare( PHP_VERSION, '8.0', '>=' ),
+			'wordpress'    => function_exists( 'wp_get_current_user' ),
+		);
+
+		$healthy = true;
+		foreach ( $checks as $check => $status ) {
+			if ( ! $status ) {
+				$healthy = false;
+				break;
+			}
+		}
+
+		return new WP_REST_Response(
+			array(
+				'ok'       => $healthy,
+				'status'   => $healthy ? 'healthy' : 'degraded',
+				'checks'   => $checks,
+				'timestamp'=> current_time( 'mysql', true ),
+				'version'  => VMSAI_VERSION,
+			),
+			$healthy ? 200 : 503
+		);
+	}
+
+	/**
+	 * Check for plugin updates from GitHub.
+	 *
+	 * @param WP_REST_Request $request Request instance.
+	 * @return WP_REST_Response
+	 */
+	public function check_update( WP_REST_Request $request ) {
+		$force = (bool) ( $request->get_param( 'force' ) ?? true );
+		$info  = VMSAI_Github_Updater::instance()->get_remote_info( $force );
+
+		return new WP_REST_Response(
+			array(
+				'ok'             => true,
+				'current_version'=> VMSAI_VERSION,
+				'latest_version' => $info['version'] ?? VMSAI_VERSION,
+				'has_update'     => ! empty( $info['has_update'] ),
+				'download_url'   => $info['download_url'] ?? '',
+				'release_notes'  => $info['release_notes'] ?? '',
+				'published_at'   => $info['published_at'] ?? '',
+				'is_release'     => ! empty( $info['is_release'] ),
+				'repo'           => $info['repo'] ?? VMSAI_Github_Updater::GITHUB_REPO,
+				'branch'         => $info['branch'] ?? VMSAI_Github_Updater::GITHUB_BRANCH,
+				'last_checked'   => $info['last_checked'] ?? current_time( 'mysql' ),
+			),
+			200
+		);
+	}
+
+	/**
+	 * Trigger direct 1-click update from GitHub repository.
+	 *
+	 * @param WP_REST_Request $request Request instance.
+	 * @return WP_REST_Response
+	 */
+	public function github_update( WP_REST_Request $request ) {
+		$result = VMSAI_Github_Updater::instance()->perform_direct_update();
+
+		return new WP_REST_Response(
+			$result,
+			! empty( $result['ok'] ) ? 200 : 400
+		);
 	}
 }

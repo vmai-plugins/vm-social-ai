@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
  */
 class VMSAI_Install {
 
-	const DB_VERSION    = '1.9.2';
+	const DB_VERSION    = '1.9.3';
 	const OPT_DB_VER    = 'vmsai_db_version';
 	const CRON_TICK     = 'vmsai_cron_tick';
 	const CRON_PLANNER  = 'vmsai_cron_planner';
@@ -170,6 +170,7 @@ class VMSAI_Install {
 			angle TEXT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'planned',
 			queue_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			last_error TEXT NULL,
 			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
 			updated_at DATETIME NULL,

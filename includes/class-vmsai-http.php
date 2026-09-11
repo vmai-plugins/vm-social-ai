@@ -38,48 +38,19 @@ class VMSAI_Http {
 			$headers['Content-Type'] = 'application/json';
 		}
 
-		$ssl_verify = true;
-		$local_hosts = array( 'localhost', '.local', '.test', '.example' );
-		$site_url = home_url();
-
-		// Disable SSL verify ONLY for local targets or loopback.
-		$current_host = wp_parse_url( $site_url, PHP_URL_HOST );
-		$target_host  = wp_parse_url( $url, PHP_URL_HOST );
-
-		foreach ( $local_hosts as $host ) {
-			if ( $target_host && false !== strpos( $target_host, $host ) ) {
-				$ssl_verify = false;
-				break;
-			}
-		}
-
-		if ( $current_host && $target_host && $current_host === $target_host ) {
-			$ssl_verify = false;
-		}
-
-		if ( $current_host && $target_host && $current_host === $target_host ) {
-			$ssl_verify = false;
-		}
-
 		// Note: SSL verification is intentionally NOT relaxed based on the
 		// site's WP_ENVIRONMENT_TYPE. Real third-party API keys (Gemini,
 		// OpenRouter, NVIDIA, etc.) go out over these requests regardless of
 		// whether this site is labelled local/staging/production — only
-		// genuinely local/loopback targets (checked above) should ever skip
-		// certificate verification.
-
-		// Filter for loopback issues: Force IPv4 and disable SSL verify if target is current site.
-		$loopback_check = function( $r, $target_url ) use ( $site_url ) {
-			$current_host = wp_parse_url( $site_url, PHP_URL_HOST );
-			$target_host  = wp_parse_url( $target_url, PHP_URL_HOST );
-
-			if ( $current_host && $target_host && $current_host === $target_host ) {
-				$r['sslverify'] = false;
-			}
-			return $r;
-		};
-
-		add_filter( 'http_request_args', $loopback_check, 10, 2 );
+		// genuinely local/loopback targets should ever skip certificate
+		// verification.
+		//
+		// This used to be relaxed via a global `http_request_args` filter that
+		// was only removed on the failure path, so every successful call left a
+		// closure attached that went on rewriting `sslverify` for every other
+		// plugin's requests for the rest of the page load. The decision is made
+		// here instead, on this request only.
+		$ssl_verify = ! self::is_local_host( wp_parse_url( $url, PHP_URL_HOST ) );
 
 		$request = array(
 			'method'      => strtoupper( $method ),
@@ -165,8 +136,6 @@ class VMSAI_Http {
 				}
 			}
 		} while ( $attempt <= $retries );
-
-		remove_filter( 'http_request_args', $loopback_check, 10 );
 
 		VMSAI_Logger::warn( $scope, 'Request failed: ' . $last, array( 'url' => self::safe_url( $url ) ) );
 

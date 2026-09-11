@@ -71,19 +71,33 @@ class VMSAI_Channel_Manager {
 	}
 
 	/**
+	 * Channel objects that are switched on and fully credentialed.
+	 *
+	 * ready() hands back slugs, which is what the planner and composer work
+	 * in. Anything that needs to talk to the channel itself — the Inbox
+	 * pulling comments, for one — needs the objects, and called enabled()
+	 * for them long before the method existed.
+	 *
+	 * @return VMSAI_Channel[] Keyed by slug.
+	 */
+	public function enabled() {
+		$out = array();
+
+		foreach ( $this->channels as $slug => $channel ) {
+			if ( VMSAI_Settings::channel_enabled( $slug ) && $channel->is_connected() ) {
+				$out[ $slug ] = $channel;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
 	 * Channels that are both switched on and fully credentialed.
 	 *
 	 * @return string[]
 	 */
 	public function ready() {
-		$out = array();
-
-		foreach ( $this->channels as $slug => $channel ) {
-			if ( VMSAI_Settings::channel_enabled( $slug ) && $channel->is_connected() ) {
-				$out[] = $slug;
-			}
-		}
-
-		return $out;
+		return array_keys( $this->enabled() );
 	}
 }

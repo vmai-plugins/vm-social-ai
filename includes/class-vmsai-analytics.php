@@ -545,6 +545,11 @@ class VMSAI_Analytics {
 	 * @return array{weeks:int,posted_today:bool,posts_this_week:int,last_published:string}
 	 */
 	public static function streak() {
+		$cached = get_transient( 'vmsai_streak' );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
 		global $wpdb;
 		$queue = VMSAI_Install::table( 'queue' );
 
@@ -585,12 +590,19 @@ class VMSAI_Analytics {
 			)
 		);
 
-		return array(
+		$out = array(
 			'weeks'           => $count,
 			'posted_today'    => in_array( $today, array_map( 'strval', $dates ), true ),
 			'posts_this_week' => $posts_this_week,
 			'last_published'  => (string) $wpdb->get_var( "SELECT MAX(published_at) FROM `$queue` WHERE status = 'published'" ), // phpcs:ignore
 		);
+
+		// Rolling weekly figures do not change between page loads, but they
+		// cost three queries to derive. Publishing clears this immediately, so
+		// the streak still reacts the moment something goes out.
+		set_transient( 'vmsai_streak', $out, 15 * MINUTE_IN_SECONDS );
+
+		return $out;
 	}
 
 	/**

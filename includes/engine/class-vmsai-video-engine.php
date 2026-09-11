@@ -25,6 +25,7 @@ class VMSAI_Video_Engine {
 			'heygen'       => __( 'HeyGen AI Avatar (Digital Twin)', 'vm-social-ai-pro' ),
 			'cogvideox'    => __( 'CogVideoX (HF)', 'vm-social-ai-pro' ),
 			'pexels'       => __( 'Pexels Stock', 'vm-social-ai-pro' ),
+			'omniroute'    => __( 'OmniRoute (Self-hosted)', 'vm-social-ai-pro' ),
 			'pollinations' => __( 'Pollinations (free)', 'vm-social-ai-pro' ),
 			'svd'          => __( 'Stable Video Diffusion', 'vm-social-ai-pro' ),
 		);
@@ -95,6 +96,14 @@ class VMSAI_Video_Engine {
 		if ( 'cogvideox' === $slug ) {
 			$models = array(
 				array( 'id' => 'cogvideox-5b', 'label' => 'CogVideoX-5b' ),
+			);
+		}
+
+		if ( 'omniroute' === $slug ) {
+			$models = array(
+				array( 'id' => 'luma-dream-machine', 'label' => 'Luma Dream Machine' ),
+				array( 'id' => 'kling', 'label' => 'Kling AI' ),
+				array( 'id' => 'runway-gen3', 'label' => 'Runway Gen-3' ),
 			);
 		}
 
@@ -189,7 +198,7 @@ class VMSAI_Video_Engine {
 	 * @return array{ok:bool,binary:string,error:string}
 	 */
 	public function create( $prompt, $template = 'cinematic_product', $provider = null ) {
-		$chain = $provider ? array( $provider ) : (array) VMSAI_Settings::get( 'video_chain', array( 'minimax', 'luma', 'heygen', 'cogvideox', 'pollinations', 'pexels', 'svd' ) );
+		$chain = $provider ? array( $provider ) : (array) VMSAI_Settings::get( 'video_chain', array( 'minimax', 'luma', 'heygen', 'cogvideox', 'omniroute', 'pollinations', 'pexels', 'svd' ) );
 
 		if ( empty($chain) ) {
 			return array( 'ok' => false, 'binary' => '', 'error' => 'Video engine disabled or no providers in chain.' );
@@ -218,6 +227,7 @@ class VMSAI_Video_Engine {
 			elseif ( 'minimax' === $source )  $res = $this->from_minimax( $prompt );
 			elseif ( 'luma' === $source )     $res = $this->from_luma( $prompt );
 			elseif ( 'heygen' === $source )   $res = $this->from_heygen( $prompt );
+			elseif ( 'omniroute' === $source ) $res = $this->from_omniroute( $prompt );
 			elseif ( 'cogvideox' === $source ) $res = $this->from_cogvideox( $prompt );
 			elseif ( 'svd' === $source )      $res = $this->from_svd( $prompt );
 
@@ -753,6 +763,64 @@ class VMSAI_Video_Engine {
 		}
 
 		return array( 'ok' => false, 'binary' => '', 'error' => 'Luma generation timed out.' );
+	}
+
+	/**
+	 * OmniRoute Video Generation.
+	 */
+	private function from_omniroute( $prompt ) {
+		$key = VMSAI_Settings::credential( 'omniroute_key' );
+		$url = VMSAI_Settings::credential( 'omniroute_url' );
+
+		if ( ! $key || ! $url ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute credentials missing.' );
+		}
+
+		$model = VMSAI_Settings::get( 'video_model' )['omniroute'] ?? 'luma-dream-machine';
+
+		$res = VMSAI_Http::post( rtrim( $url, '/' ) . '/video/generations', array(
+			'headers' => array( 'Authorization' => 'Bearer ' . $key ),
+			'json'    => array(
+				'prompt' => $prompt,
+				'model'  => $model,
+			),
+			'scope'   => 'engine.video.omniroute',
+			'timeout' => 300
+		) );
+
+		if ( ! $res['ok'] || empty( $res['json']['id'] ) ) {
+			// Some providers might return the video URL directly if they don't use polling
+			if ( ! empty( $res['json']['data'][0]['url'] ) ) {
+				$download = VMSAI_Http::get( $res['json']['data'][0]['url'], array( 'timeout' => 120 ) );
+				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+			}
+			return array( 'ok' => false, 'binary' => '', 'error' => $res['error'] ?: 'Failed to create OmniRoute task.' );
+		}
+
+		$task_id = $res['json']['id'];
+
+		// Polling loop
+		for ( $i = 0; $i < 30; $i++ ) {
+			sleep( 10 );
+			$status = VMSAI_Http::get( rtrim( $url, '/' ) . '/video/generations/' . $task_id, array(
+				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
+				'scope'   => 'engine.video.omniroute'
+			) );
+
+			if ( ! $status['ok'] ) continue;
+
+			$state = $status['json']['status'] ?? $status['json']['state'] ?? '';
+			if ( in_array( $state, array( 'completed', 'Success', 'succeeded' ) ) && ! empty( $status['json']['url'] ) ) {
+				$download = VMSAI_Http::get( $status['json']['url'], array( 'timeout' => 120 ) );
+				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+			}
+
+			if ( in_array( $state, array( 'failed', 'Fail', 'error' ) ) ) {
+				return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute generation failed.' );
+			}
+		}
+
+		return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute generation timed out.' );
 	}
 
 	/**

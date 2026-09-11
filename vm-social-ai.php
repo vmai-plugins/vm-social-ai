@@ -3,7 +3,7 @@
  * Plugin Name:       VM Social AI Pro
  * Plugin URI:        https://vmstudio.digital/plugins/vm-social-ai
  * Description:       Enterprise-grade autonomous social media growth engine. Dual AI engines with live model sync, Agentic War Room logic, Digital Twin simulation, News-Jacking (RAG), and Cloudflare R2 offloading.
- * Version:           1.15.2
+ * Version:           1.16.1
  * Requires at least: 6.2
  * Requires PHP:      8.0
  * Author:            VM Studio Creatives
@@ -18,7 +18,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VMSAI_VERSION', '1.15.2' );
+define( 'VMSAI_VERSION', '1.16.1' );
 define( 'VMSAI_FILE', __FILE__ );
 define( 'VMSAI_PATH', plugin_dir_path( __FILE__ ) );
 define( 'VMSAI_URL', plugin_dir_url( __FILE__ ) );

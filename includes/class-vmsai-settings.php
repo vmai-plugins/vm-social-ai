@@ -37,14 +37,14 @@ class VMSAI_Settings {
 	public static function defaults() {
 		return array(
 			'autonomy'            => 'assisted', // full | assisted | manual.
-			'text_chain'          => array( 'aipuffer', 'anthropic', 'gemini', 'openrouter', 'nvidia', 'ollama' ),
+			'text_chain'          => array( 'aipuffer', 'omniroute', 'anthropic', 'gemini', 'openrouter', 'nvidia', 'ollama' ),
 			// Free-first, and every entry actually generates. AI Puffer leads
 			// because it fronts many models behind one setup; Pollinations is
 			// the keyless floor. Pexels is deliberately absent: it returns an
 			// existing stock photo, which cannot honour a visual brief and
 			// effectively never fails, so including it by default meant it
 			// silently absorbed every request once anything above it faltered.
-			'image_chain'         => array( 'aipuffer', 'pollinations', 'gemini', 'huggingface', 'cloudflare', 'openrouter', 'vmimageai', 'comfyui' ),
+			'image_chain'         => array( 'aipuffer', 'omniroute', 'pollinations', 'gemini', 'huggingface', 'cloudflare', 'openrouter', 'vmimageai', 'comfyui' ),
 			'text_model'          => array(),   // provider => model id.
 			'image_model'         => array(),
 			'request_timeout'     => 90,
@@ -70,6 +70,7 @@ class VMSAI_Settings {
 			'log_level'           => 'info',
 			'admin_theme'         => 'dark',
 			'remote_storage'      => 'off', // off | r2
+			'video_chain'         => array( 'aipuffer', 'omniroute', 'minimax', 'luma', 'heygen', 'cogvideox', 'pollinations', 'pexels', 'svd' ),
 			'video_source'        => 'pexels', // pexels | pollinations | off
 			'elevenlabs_voice'    => 'pNInz6ov9TqWwaY67P6D',
 			'white_label'         => 0,
@@ -170,6 +171,48 @@ class VMSAI_Settings {
 	}
 
 	/**
+	 * Every name that may be stored as a credential.
+	 *
+	 * Channel keys are read from the channels themselves rather than listed
+	 * here, so adding a channel cannot leave this behind — a hand-maintained
+	 * copy of that list has already gone stale once elsewhere in the plugin.
+	 *
+	 * @return string[]
+	 */
+	public static function credential_keys() {
+		$keys = array(
+			// Text, image and video providers.
+			'openai_key', 'openai_image_url',
+			'aipuffer_site', 'aipuffer_key', 'aipuffer_bot_id',
+			'anthropic_key', 'gemini_key', 'openrouter_key',
+			'nvidia_key', 'nvidia_url',
+			'ollama_url', 'ollama_token',
+			'omniroute_url', 'omniroute_key',
+			'hf_token', 'cf_token', 'pollinations_token',
+			'comfyui_url', 'comfyui_token', 'comfyui_workflow',
+			'pexels_key', 'minimax_key', 'luma_key',
+			'heygen_key', 'heygen_avatar_id', 'heygen_voice_id',
+			'svd_url', 'elevenlabs_key', 'tavily_key',
+			// Storage, media tooling and networking.
+			'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url',
+			'ffmpeg_path', 'outbound_proxy',
+		);
+
+		if ( function_exists( 'vmsai' ) && vmsai()->channels() ) {
+			foreach ( vmsai()->channels()->all() as $channel ) {
+				$keys = array_merge( $keys, array_keys( $channel->credential_fields() ) );
+			}
+		}
+
+		/**
+		 * Filter the storable credential names.
+		 *
+		 * @param string[] $keys Allowed credential keys.
+		 */
+		return array_values( array_unique( apply_filters( 'vmsai_credential_keys', $keys ) ) );
+	}
+
+	/**
 	 * Store credentials, encrypting non-empty values.
 	 *
 	 * @param array $patch Key => plaintext value.
@@ -178,10 +221,20 @@ class VMSAI_Settings {
 	public static function update_credentials( array $patch ) {
 		$raw = get_option( self::CRED_OPTION, array() );
 		$raw = is_array( $raw ) ? $raw : array();
+		$allowed = self::credential_keys();
 		$updated = false;
 
 		foreach ( $patch as $key => $value ) {
 			$key = sanitize_key( $key );
+
+			// Only real credential names are storable. This used to accept
+			// whatever it was handed, so a caller that over-collected form
+			// fields could write the nonce, the referer, the form's action
+			// and section markers and every chain checkbox into the encrypted
+			// credential store as permanent junk.
+			if ( ! in_array( $key, $allowed, true ) ) {
+				continue;
+			}
 
 			// If the value is purely bullets, the user didn't change it.
 			if ( self::is_masked( $value ) ) {

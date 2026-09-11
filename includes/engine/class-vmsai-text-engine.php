@@ -32,6 +32,7 @@ class VMSAI_Text_Engine {
 			'openrouter' => 'VMSAI_Text_Openrouter',
 			'nvidia'     => 'VMSAI_Text_Nvidia',
 			'ollama'     => 'VMSAI_Text_Ollama',
+			'omniroute'  => 'VMSAI_Text_OmniRoute',
 		);
 
 		/**

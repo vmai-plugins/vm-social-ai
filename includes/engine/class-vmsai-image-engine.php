@@ -47,6 +47,7 @@ class VMSAI_Image_Engine {
 			'pollinations' => 'VMSAI_Image_Pollinations',
 			'comfyui'      => 'VMSAI_Image_Comfyui',
 			'openrouter'   => 'VMSAI_Image_OpenRouter',
+			'omniroute'    => 'VMSAI_Image_OmniRoute',
 			'vmimageai'    => 'VMSAI_Image_VMImageAI',
 			'pexels'       => 'VMSAI_Image_Pexels',
 		);
@@ -307,6 +308,13 @@ class VMSAI_Image_Engine {
 		update_post_meta( $attachment_id, '_wp_attachment_image_alt', $this->seo_alt( $meta ) );
 		update_post_meta( $attachment_id, '_vmsai_provider', $provider );
 		update_post_meta( $attachment_id, '_vmsai_prompt', substr( (string) ( $meta['prompt'] ?? '' ), 0, 1000 ) );
+
+		// Engine tests produce a throwaway image. Tagging it lets the next
+		// test clear the previous one, instead of every click of "Test the
+		// Picture Chain" leaving another orphan in the media library forever.
+		if ( ! empty( $meta['is_test'] ) ) {
+			update_post_meta( $attachment_id, '_vmsai_test', 1 );
+		}
 
 		// Offload to remote storage if enabled.
 		if ( 'off' !== VMSAI_Settings::get( 'remote_storage', 'off' ) ) {

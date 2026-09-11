@@ -81,7 +81,7 @@ class VMSAI_Scheduler {
 		if ( 'off' !== VMSAI_Settings::get( 'remote_storage' ) ) {
 			global $wpdb;
 			$table = VMSAI_Install::table( 'queue' );
-			$rows = $wpdb->get_results( "SELECT media_id FROM `$table` WHERE media_id > 0 AND published_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)" );
+			$rows = $wpdb->get_results( "SELECT media_id FROM `$table` WHERE media_id > 0 AND (published_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) OR published_at IS NULL)" );
 
 			foreach ( $rows as $row ) {
 				$media_id = (int) $row->media_id;
@@ -238,15 +238,36 @@ class VMSAI_Scheduler {
 				continue;
 			}
 
-			$wpdb->update( // phpcs:ignore
-				$plan_table,
-				array( 'status' => 'failed', 'last_error' => mb_substr( $result['error'], 0, 500 ), 'updated_at' => current_time( 'mysql', true ) ),
-				array( 'id' => (int) $slot['id'] ),
-				array( '%s', '%s', '%s' ),
-				array( '%d' )
-			);
+			// Retry logic for composition failures (similar to dispatch)
+			$attempts = (int) $wpdb->get_var( $wpdb->prepare( "SELECT attempts FROM `$plan_table` WHERE id = %d", (int) $slot['id'] ) ) + 1; // phpcs:ignore
+			$max_attempts = max( 1, (int) VMSAI_Settings::get( 'max_attempts', 3 ) );
 
-			VMSAI_Logger::error( 'scheduler', 'Composition failed for a slot.', array( 'slot' => $slot['id'], 'error' => $result['error'] ) );
+			if ( $attempts >= $max_attempts ) {
+				$wpdb->update( // phpcs:ignore
+					$plan_table,
+					array( 'status' => 'failed', 'attempts' => $attempts, 'last_error' => mb_substr( $result['error'], 0, 500 ), 'updated_at' => current_time( 'mysql', true ) ),
+					array( 'id' => (int) $slot['id'] ),
+					array( '%s', '%d', '%s', '%s' ),
+					array( '%d' )
+				);
+				VMSAI_Logger::error( 'scheduler', 'Composition failed permanently for a slot.', array( 'slot' => $slot['id'], 'error' => $result['error'] ) );
+			} else {
+				// Exponential backoff: 5 minutes, then 20 minutes, then 80 minutes...
+				$delay = 5 * MINUTE_IN_SECONDS * ( 4 ** ( $attempts - 1 ) );
+				$wpdb->update( // phpcs:ignore
+					$plan_table,
+					array(
+						'attempts'     => $attempts,
+						'last_error'   => mb_substr( $result['error'], 0, 500 ),
+						'status'       => 'planned',
+						'updated_at'   => current_time( 'mysql', true ),
+					),
+					array( 'id' => (int) $slot['id'] ),
+					array( '%d', '%s', '%s', '%s' ),
+					array( '%d' )
+				);
+				VMSAI_Logger::warn( 'scheduler', 'Composition failed, will retry later.', array( 'slot' => $slot['id'], 'attempt' => $attempts, 'error' => $result['error'] ) );
+			}
 		}
 
 		return $count;

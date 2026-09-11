@@ -253,7 +253,7 @@ class VMSAI_Admin {
 
 		if ( 'settings' === $section ) {
 			$redirect_tab = 'settings';
-		} elseif ( in_array( $section, array( 'engines', 'channels', 'logs', 'plans' ), true ) ) {
+		} elseif ( in_array( $section, array( 'engines', 'channels', 'logs', 'plans', 'updates' ), true ) ) {
 			$redirect_tab  = 'settings';
 			$redirect_hash = '#vmsai-section-' . $section;
 		} elseif ( isset( self::tabs()[ $section ] ) ) {
@@ -424,7 +424,7 @@ class VMSAI_Admin {
 		);
 
 		$credentials = array();
-		foreach ( array( 'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url', 'outbound_proxy' ) as $field ) {
+		foreach ( array( 'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url', 'outbound_proxy', 'github_token' ) as $field ) {
 			if ( isset( $post[ $field ] ) ) {
 				$credentials[ $field ] = trim( (string) $post[ $field ] );
 			}
