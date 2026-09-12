@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.0.0
+Stable tag: 1.17.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,33 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **The critic.** Every draft is linted for stock AI phrasing, missing keywords, over-length copy and anything the Brain marks as forbidden. Failures are rewritten before they reach the queue.
 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
+
+== Changelog ==
+
+= 1.17.0 =
+* Fixed: undefined VMSAI_Video_Engine::produce() fatal on video-format posts (TikTok, YouTube, Instagram, Facebook).
+* Security: Telegram webhook callback now verifies the chat owner before processing approvals; callback data parsing hardened.
+* Security: credential save/save-tests are staged and rolled back on failure, so a failed engine or channel test no longer clobbers saved keys.
+* Security: settings-form credentials (R2, outbound proxy, GitHub token) now require the vmsai_manage_keys capability.
+* Security: stored XSS in the admin text/video engine test panels (third-party error output and raw model text were injected unescaped).
+* Security: universal test license keys now only activate when VMSAI_DEV_TEST_KEYS is defined.
+* Fixed: portal can no longer approve/un-publish posts in processing, failed or published states; portal media renders as video for MP4s; share links now expire after two weeks.
+* Fixed: Facebook Reels upload rebuilt to the real three-phase video_reels protocol (was corrupting the binary as a multipart form post).
+* Fixed: LinkedIn/YouTube/R2 uploads stream from disk instead of loading whole videos into memory; LinkedIn PUT now sends the required Content-Type.
+* Fixed: Bluesky post dates use the ATProto format and blob uploads send an explicit Content-Type; Threads polls container status instead of a blind sleep.
+* Fixed: composer now has real specs for Threads, Bluesky, TikTok, Telegram and Pinterest (was cutting everything to Facebook limits).
+* Fixed: inbox timestamps normalized to MySQL format for ISO8601 and unix-time sources.
+* Fixed: analytics stores zero-metric rows (flops show as 0, not "no data") but stops re-polling posts that have been all-zero for a week.
+* Fixed: video engine reaches full operation — usage tracking, circuit breakers, non-blocking polling, FFmpeg drawtext escaping, OmniRoute/HeyGen/SVD/Luma/Minimax provider config detection, saved avatar/voice honored.
+* Fixed: image engine no longer force-appends Pollinations against the configured chain; canvas sizes added for Threads, Bluesky, TikTok, Telegram and Pinterest.
+* Fixed: scheduler applies retry backoff, reverts rows stranded by daily caps/quiet hours/circuit breakers, cleanup no longer deletes draft/failed media, NULL-safe evergreen recycle.
+* Fixed: uninstall now removes all tables, crons, options and transients.
+* Fixed: GitHub updater works on PHP 7.4, backs off after repeated failures instead of hanging wp-admin, and no longer renames unrelated directories during bulk updates.
+* Fixed: Anthropic uses the live model catalogue instead of a retired model ID; AIPuffer integration survives AIPKit API changes; Gemini image base64 validated strictly; Cloudflare Workers AI config detection corrected.
+* Fixed: crons fully unscheduled on deactivation; plugin action links hooked; orphan autoloader directory removed; stray XML state file deleted; research guard added for filtered providers.
+
+= 1.16.1 =
+* Fixed: fatal call to undefined VMSAI_Http::is_local_host().
 
 == Installation ==
 

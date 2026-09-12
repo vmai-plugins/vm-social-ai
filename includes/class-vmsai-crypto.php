@@ -22,17 +22,35 @@ class VMSAI_Crypto {
 	/**
 	 * Generate a secure token for external portal access.
 	 */
-	public static function generate_portal_token( $queue_id ) {
+	public static function generate_portal_token( $queue_id, $ttl = 0 ) {
 		$key = self::key();
-		return hash_hmac( 'sha256', (int) $queue_id . '|' . get_option( 'admin_email' ), $key );
+		$exp = $ttl > 0 ? time() + (int) $ttl : 0;
+		$body = (int) $queue_id . '|' . get_option( 'admin_email' ) . '|' . $exp;
+		$sig = hash_hmac( 'sha256', $body, $key );
+		return $exp > 0 ? $exp . '.' . $sig : $sig;
 	}
 
 	/**
-	 * Verify an external portal token.
+	 * Verify an external portal token. Accepts legacy timeless tokens and
+	 * new exp.sig tokens (rejects expired ones).
 	 */
 	public static function verify_portal_token( $queue_id, $token ) {
-		$expected = self::generate_portal_token( $queue_id );
-		return hash_equals( $expected, $token );
+		$token = (string) $token;
+		if ( false !== strpos( $token, '.' ) ) {
+			list( $exp, $sig ) = explode( '.', $token, 2 );
+			if ( ! ctype_digit( (string) $exp ) || (int) $exp < time() ) {
+				return false;
+			}
+			$expected = hash_hmac( 'sha256', (int) $queue_id . '|' . get_option( 'admin_email' ) . '|' . (int) $exp, self::key() );
+			return hash_equals( $expected, (string) $sig );
+		}
+		// Legacy timeless token (still honoured; new links carry expiry).
+		$expected = hash_hmac( 'sha256', (int) $queue_id . '|' . get_option( 'admin_email' ) . '|0', self::key() );
+		if ( hash_equals( $expected, $token ) ) {
+			return true;
+		}
+		$very_legacy = hash_hmac( 'sha256', (int) $queue_id . '|' . get_option( 'admin_email' ), self::key() );
+		return hash_equals( $very_legacy, $token );
 	}
 
 	/**

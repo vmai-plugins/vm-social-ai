@@ -38,14 +38,18 @@ class VMSAI_Storage {
 		}
 
 		$host = "{$bucket}.{$account_id}.r2.cloudflarestorage.com";
-		$url  = "https://{$host}/{$filename}";
 
-		$content = file_get_contents( $local_path );
-		if ( false === $content ) {
+		// Path-segment encoding: filenames can contain spaces or Unicode,
+		// which otherwise break both the request URL and the returned
+		// public URL.
+		$encoded = rawurlencode( $filename );
+		$url     = "https://{$host}/{$encoded}";
+
+		if ( ! file_exists( $local_path ) || ! is_readable( $local_path ) ) {
 			return new WP_Error( 'read_failed', 'Could not read local file.' );
 		}
 
-		$response = self::s3_put( $url, $host, $content, $mime, $access_key, $secret_key );
+		$response = self::s3_put( $url, $host, $local_path, $mime, $access_key, $secret_key );
 
 		if ( is_wp_error( $response ) ) {
 			return $response;
@@ -53,16 +57,17 @@ class VMSAI_Storage {
 
 		// Return the custom public URL if provided, otherwise the direct R2 URL.
 		if ( $public_url ) {
-			return untrailingslashit( $public_url ) . '/' . $filename;
+			return untrailingslashit( $public_url ) . '/' . $encoded;
 		}
 
 		return $url;
 	}
 
 	/**
-	 * Simple S3-compatible PUT request with AWS Signature V4.
+	 * Simple S3-compatible PUT request with AWS Signature V4. The body is
+	 * streamed from disk — a video can far exceed available memory.
 	 */
-	private static function s3_put( $url, $host, $content, $mime, $key, $secret ) {
+	private static function s3_put( $url, $host, $path, $mime, $key, $secret ) {
 		$region = 'auto';
 		$service = 's3';
 		$method = 'PUT';
@@ -70,8 +75,8 @@ class VMSAI_Storage {
 		$amz_date = gmdate( 'Ymd\THis\Z', $now );
 		$date_stamp = gmdate( 'Ymd', $now );
 
-		$path = wp_parse_url( $url, PHP_URL_PATH );
-		$content_hash = hash( 'sha256', $content );
+		$url_path    = wp_parse_url( $url, PHP_URL_PATH );
+		$content_hash = hash_file( 'sha256', $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 
 		$headers = array(
 			'Host' => $host,
@@ -81,7 +86,7 @@ class VMSAI_Storage {
 		);
 
 		// Canonical Request
-		$canonical_uri = $path;
+		$canonical_uri = $url_path;
 		$canonical_querystring = '';
 		$canonical_headers = "content-type:{$mime}\nhost:{$host}\nx-amz-content-sha256:{$content_hash}\nx-amz-date:{$amz_date}\n";
 		$signed_headers = 'content-type;host;x-amz-content-sha256;x-amz-date';
@@ -102,21 +107,11 @@ class VMSAI_Storage {
 
 		$headers['Authorization'] = "{$algorithm} Credential={$key}/{$credential_scope}, SignedHeaders={$signed_headers}, Signature={$signature}";
 
-		$response = wp_remote_request( $url, array(
-			'method' => 'PUT',
-			'headers' => $headers,
-			'body' => $content,
-			'timeout' => 60,
-			'sslverify' => true,
-		) );
+		// Streamed upload — keeps multi-hundred-MB videos out of memory.
+		$response = VMSAI_Http::send_file( 'PUT', $url, $path, $headers, 'storage.r2', 300 );
 
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		if ( $code < 200 || $code >= 300 ) {
-			return new WP_Error( 'r2_upload_failed', 'R2 returned HTTP ' . $code . ': ' . wp_remote_retrieve_body( $response ) );
+		if ( ! $response['ok'] ) {
+			return new WP_Error( 'r2_upload_failed', $response['error'] ?: 'R2 upload failed.' );
 		}
 
 		return true;

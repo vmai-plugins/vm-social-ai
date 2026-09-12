@@ -48,8 +48,8 @@ class VMSAI_Logger {
 			array(
 				'level'      => $level,
 				'scope'      => substr( $scope, 0, 40 ),
-				'message'    => substr( (string) $message, 0, 1000 ), // Increased limit
-				'context'    => $context ? substr( wp_json_encode( self::redact( $context ) ), 0, 4000 ) : null, // Increased limit
+				'message'    => substr( (string) $message, 0, 4000 ),
+				'context'    => $context ? wp_json_encode( self::redact( $context ) ) : null,
 				'created_at' => current_time( 'mysql', true ),
 			),
 			array( '%s', '%s', '%s', '%s', '%s' )

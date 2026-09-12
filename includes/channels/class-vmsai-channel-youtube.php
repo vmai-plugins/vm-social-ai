@@ -144,16 +144,15 @@ class VMSAI_Channel_Youtube extends VMSAI_Channel {
 			return $this->fail( __( 'YouTube did not return an upload session URL.', 'vm-social-ai-pro' ) );
 		}
 
-		$uploaded = VMSAI_Http::request(
+		// Stream the upload: a Shorts MP4 easily exceeds available memory,
+		// so the file is piped off disk rather than read into RAM.
+		$uploaded = VMSAI_Http::send_file(
 			'PUT',
 			$location,
-			array(
-				'headers' => array( 'Content-Type' => 'video/mp4' ),
-				'body'    => file_get_contents( $video_file ), // phpcs:ignore WordPress.WP.AlternativeFunctions
-				'scope'   => 'channel.youtube',
-				'timeout' => 600,
-				'retries' => 1,
-			)
+			$video_file,
+			array( 'Content-Type' => 'video/mp4' ),
+			'channel.youtube',
+			600
 		);
 
 		$this->cleanup( $video_file );

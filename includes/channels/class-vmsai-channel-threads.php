@@ -55,8 +55,30 @@ class VMSAI_Channel_Threads extends VMSAI_Channel {
 
 		$creation_id = $container['json']['id'];
 
-		// Threads needs a few seconds to process media
-		if ( $image ) sleep( 5 );
+		// Poll the container instead of a blind sleep(): Threads media
+		// processing can take longer than 5s (a fixed sleep both blocked
+		// cron AND still raced the publish), and 'FINISHED' is known
+		// immediately for text-only posts.
+		if ( $image ) {
+			$state    = '';
+			$deadline = time() + 25;
+			while ( time() < $deadline ) {
+				sleep( 3 );
+				$status = VMSAI_Http::get(
+					self::GRAPH . '/' . rawurlencode( $id ) . '/' . rawurlencode( $creation_id ) . '?' . http_build_query( array( 'fields' => 'status', 'access_token' => $token ) ),
+					array( 'scope' => 'channel.threads' )
+				);
+				if ( $status['ok'] ) {
+					$state = (string) ( $status['json']['status'] ?? '' );
+					if ( 'FINISHED' === $state || 'ERROR' === $state ) {
+						break;
+					}
+				}
+			}
+			if ( 'ERROR' === $state ) {
+				return $this->fail( __( 'Threads failed to process the media container.', 'vm-social-ai-pro' ) );
+			}
+		}
 
 		// Step 2: Publish
 		$published = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode($id) . '/threads_publish', array(

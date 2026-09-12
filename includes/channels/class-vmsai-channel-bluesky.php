@@ -52,22 +52,44 @@ class VMSAI_Channel_Bluesky extends VMSAI_Channel {
 		$token = $session['accessJwt'];
 		$did   = $session['did'];
 
-		$payload = array(
-			'repo'       => $did,
-			'collection' => 'app.bsky.feed.post',
-			'record'     => array(
-				'text'      => mb_substr( $this->caption( $post, true, true ), 0, 300 ),
-				'createdAt' => current_time( 'mysql', true ),
-				'$type'     => 'app.bsky.feed.post'
-			)
+		$text = mb_substr( $this->caption( $post, true, true ), 0, 300 );
+
+		$record = array(
+			'text'      => $text,
+			'createdAt' => gmdate( 'Y-m-d\\TH:i:s\\Z' ),
+			'$type'     => 'app.bsky.feed.post',
 		);
 
-		// Note: Bluesky Image uploading requires a multi-step blob upload process.
-		// For MVP, we'll start with high-impact text posts.
+		// Only attach images if we have a usable one — otherwise emit text-only.
+		$image = $this->media_url( $post );
+		if ( $image ) {
+			// Register the image blob, fetch the handle, attach it.
+			$img_res = VMSAI_Http::post( self::API . '/com.atproto.repo.uploadBlob', array(
+				'headers' => array(
+					'Authorization' => 'Bearer ' . $token,
+					// ATProto rejects blobs without an exact mime type.
+					'Content-Type'  => 'image/jpeg',
+				),
+				'body'    => file_get_contents( $this->media_path( $post ) ),
+				'scope'   => 'channel.bluesky',
+				'timeout' => 30,
+			) );
+			if ( $img_res['ok'] && ! empty( $img_res['json']['blob']['uri'] ) ) {
+				$record['embed'] = array(
+					'$type'       => 'app.bsky.embed.images',
+					'images'      => array( array( 'image' => $img_res['json']['blob']['uri'] ) ),
+				);
+			}
+		}
 
 		$res = VMSAI_Http::post( self::API . '/com.atproto.repo.createRecord', array(
 			'headers' => array( 'Authorization' => 'Bearer ' . $token ),
-			'json'    => $payload
+			'json'    => array(
+				'repo'       => $did,
+				'collection' => 'app.bsky.feed.post',
+				'record'     => $record,
+			),
+			'scope'   => 'channel.bluesky',
 		) );
 
 		if ( ! $res['ok'] ) return $this->fail( $res['error'] );

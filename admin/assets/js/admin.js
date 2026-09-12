@@ -514,19 +514,22 @@ jQuery( function ( $ ) {
 			busy( button, false );
 			if ( ! box ) return;
 			if ( ! result.ok ) {
+				// Provider errors relay text straight from third-party APIs, so
+				// none of this can go into innerHTML unescaped (same rule the
+				// image test below follows).
 				var triedHtml = '';
 				if ( result.tried ) {
 					triedHtml = '<ul style="margin:10px 0; font-size:11px; opacity:0.8;">';
 					Object.keys( result.tried ).forEach( function( p ) {
-						triedHtml += '<li><strong>' + p + ':</strong> ' + result.tried[ p ] + '</li>';
+						triedHtml += '<li><strong>' + cfg.esc( p ) + ':</strong> ' + cfg.esc( result.tried[ p ] ) + '</li>';
 					} );
 					triedHtml += '</ul>';
 				}
-				box.innerHTML = '<p>Engine chain test failed.</p>' + triedHtml + '<p>' + ( result.message || '' ) + '</p>';
+				box.innerHTML = '<p>Engine chain test failed.</p>' + triedHtml + '<p>' + cfg.esc( result.message || '' ) + '</p>';
 				toast( result.message || cfg.i18n.failed, true );
 				return;
 			}
-			box.innerHTML = '<p><strong>' + result.provider + '</strong> answered.</p><p>' + result.text + '</p>';
+			box.innerHTML = '<p><strong>' + cfg.esc( result.provider ) + '</strong> answered.</p><p>' + cfg.esc( result.text || '' ) + '</p>';
 			toast( 'Text engine reachable via ' + result.provider + '.' );
 		} );
 	};
@@ -577,12 +580,12 @@ jQuery( function ( $ ) {
 			busy( button, false );
 			if ( ! box ) return;
 			if ( ! result.ok ) {
-				box.innerHTML = '<p>Video engine test failed. ' + ( result.message || '' ) + '</p>';
+				box.innerHTML = '<p>Video engine test failed. ' + cfg.esc( result.message || '' ) + '</p>';
 				toast( result.message || cfg.i18n.failed, true );
 				return;
 			}
 			box.innerHTML = '<p>Video generated successfully.</p>' +
-				'<video controls style="max-width:320px; border-radius:8px;"><source src="' + result.url + '" type="video/mp4"></video>';
+				'<video controls style="max-width:320px; border-radius:8px;"><source src="' + cfg.esc( result.url ) + '" type="video/mp4"></video>';
 			toast( 'Video engine working.' );
 		} ).catch( function ( err ) {
 			busy( button, false );
@@ -604,7 +607,7 @@ jQuery( function ( $ ) {
 			$result.addClass( res.ok ? 'is-ok' : 'is-bad' );
 			if ( res.ok ) {
 				if ( 'image' === engine ) $result.text( '✓ Rendered and saved.' );
-				else if ( 'video' === engine ) $result.html( '✓ Video generated: <a href="' + res.url + '" target="_blank">View</a>' );
+				else if ( 'video' === engine ) $result.html( '✓ Video generated: <a href="' + cfg.esc( res.url || '#' ) + '" target="_blank">View</a>' );
 				else $result.text( '✓ ' + ( res.text || 'Reachable.' ) );
 			} else {
 				$result.text( '✗ ' + ( res.message || cfg.i18n.failed ) );

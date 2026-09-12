@@ -37,6 +37,13 @@ class VMSAI_Github_Updater {
 	const CACHE_TTL = 43200;
 
 	/**
+	 * Transient key set for 10 minutes after both GitHub probes fail, so
+	 * rate-limited/outage conditions do not hang every admin page load
+	 * with repeated synchronous retries.
+	 */
+	const FAIL_LOCK_KEY = 'vmsai_github_update_fail';
+
+	/**
 	 * Singleton instance.
 	 *
 	 * @var VMSAI_Github_Updater|null
@@ -109,6 +116,24 @@ class VMSAI_Github_Updater {
 			if ( is_array( $cached ) && ! empty( $cached['version'] ) ) {
 				return $cached;
 			}
+
+			// Back-off window: both probes failed recently (rate limit,
+			// outage). Return the no-update shape immediately instead of
+			// blocking the admin page with another round of slow requests.
+			if ( get_transient( self::FAIL_LOCK_KEY ) ) {
+				return array(
+					'version'       => VMSAI_VERSION,
+					'current'       => VMSAI_VERSION,
+					'has_update'    => false,
+					'download_url'  => '',
+					'release_notes' => '',
+					'published_at'  => '',
+					'is_release'    => false,
+					'repo'          => self::GITHUB_REPO,
+					'branch'        => self::GITHUB_BRANCH,
+					'last_checked'  => current_time( 'mysql' ),
+				);
+			}
 		}
 
 		$token = VMSAI_Settings::credential( 'github_token' );
@@ -129,7 +154,7 @@ class VMSAI_Github_Updater {
 
 		// 1. First attempt: Query latest GitHub Release API
 		$release_endpoint = 'https://api.github.com/repos/' . self::GITHUB_REPO . '/releases/latest';
-		$response         = wp_remote_get( $release_endpoint, array( 'headers' => $headers, 'timeout' => 15 ) );
+		$response         = wp_remote_get( $release_endpoint, array( 'headers' => $headers, 'timeout' => 10 ) );
 
 		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
 			$body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -142,7 +167,7 @@ class VMSAI_Github_Updater {
 				// Check if there is an attached zip asset, otherwise fallback to zipball
 				if ( ! empty( $body['assets'] ) && is_array( $body['assets'] ) ) {
 					foreach ( $body['assets'] as $asset ) {
-						if ( isset( $asset['browser_download_url'] ) && str_ends_with( $asset['browser_download_url'], '.zip' ) ) {
+						if ( isset( $asset['browser_download_url'] ) && '.zip' === substr( (string) $asset['browser_download_url'], -4 ) ) {
 							$download_url = $asset['browser_download_url'];
 							break;
 						}
@@ -172,6 +197,14 @@ class VMSAI_Github_Updater {
 		// Fallback download URL points directly to master archive
 		if ( empty( $download_url ) ) {
 			$download_url = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/' . self::GITHUB_BRANCH . '.zip';
+		}
+
+		// Both probes failed (rate limit, outage, timeouts) — open a back-off
+		// window so subsequent update-transient refreshes return the cached
+		// no-update shape immediately instead of blocking wp-admin with two
+		// more slow HTTP requests.
+		if ( '' === $latest_version ) {
+			set_transient( self::FAIL_LOCK_KEY, 1, 15 * MINUTE_IN_SECONDS );
 		}
 
 		// If version still couldn't be parsed, fallback to current
@@ -295,8 +328,18 @@ class VMSAI_Github_Updater {
 			$is_our_plugin = true;
 		} elseif ( isset( $hook_extra['slug'] ) && VMSAI_SLUG === $hook_extra['slug'] ) {
 			$is_our_plugin = true;
-		} elseif ( strpos( $source, 'vm-social-ai' ) !== false ) {
-			$is_our_plugin = true;
+		} else {
+			// No plugin/slug hint arrives here in bulk updates — for ANY
+			// package. A bare substring match on 'vm-social-ai' could claim
+			// an unrelated extracted folder and force-rename it. Only accept
+			// directory names that actually look like our zipballs
+			// (vmai-plugins-vm-social-ai-<sha>, vm-social-ai-<branch>).
+			$dir = basename( untrailingslashit( $source ) );
+			$is_our_plugin = (
+				'vm-social-ai' === $dir
+				|| 0 === strpos( $dir, 'vmai-plugins-vm-social-ai' )
+				|| preg_match( '/^vm-social-ai-[A-Za-z0-9._-]+$/', $dir )
+			);
 		}
 
 		if ( ! $is_our_plugin ) {

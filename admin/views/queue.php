@@ -506,7 +506,7 @@ endif;
 								<div class="vmsai-btn-group">
 									<button data-vmsai-action="regenerate-post" class="vmsai-btn" title="<?php esc_attr_e( 'Rewrite the copy', 'vm-social-ai-pro' ); ?>"><?php esc_html_e( 'Rewrite', 'vm-social-ai-pro' ); ?></button>
 									<button data-vmsai-action="publish-post" class="vmsai-btn" title="<?php esc_attr_e( 'Publish immediately', 'vm-social-ai-pro' ); ?>"><?php esc_html_e( 'Publish now', 'vm-social-ai-pro' ); ?></button>
-									<button data-vmsai-action="copy-portal-link" class="vmsai-btn vmsai-btn--quiet" title="<?php esc_attr_e( 'Copy client review link', 'vm-social-ai-pro' ); ?>" data-token="<?php echo esc_attr( VMSAI_Crypto::generate_portal_token( $vmsai_p['id'] ) ); ?>"><?php esc_html_e( 'Share link', 'vm-social-ai-pro' ); ?></button>
+									<button data-vmsai-action="copy-portal-link" class="vmsai-btn vmsai-btn--quiet" title="<?php esc_attr_e( 'Copy client review link', 'vm-social-ai-pro' ); ?>" data-token="<?php echo esc_attr( VMSAI_Crypto::generate_portal_token( $vmsai_p['id'], 2 * WEEK_IN_SECONDS ) ); ?>"><?php esc_html_e( 'Share link', 'vm-social-ai-pro' ); ?></button>
 									<button data-vmsai-action="delete-post" class="vmsai-btn vmsai-btn--quiet" title="<?php esc_attr_e( 'Delete this post', 'vm-social-ai-pro' ); ?>"><?php esc_html_e( 'Delete', 'vm-social-ai-pro' ); ?></button>
 								</div>
 							<?php endif; ?>

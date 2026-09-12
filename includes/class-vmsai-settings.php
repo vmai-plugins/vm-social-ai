@@ -193,9 +193,9 @@ class VMSAI_Settings {
 			'pexels_key', 'minimax_key', 'luma_key',
 			'heygen_key', 'heygen_avatar_id', 'heygen_voice_id',
 			'svd_url', 'elevenlabs_key', 'tavily_key',
-			// Storage, media tooling and networking.
+			// Storage, media tooling, networking and updater.
 			'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url',
-			'ffmpeg_path', 'outbound_proxy',
+			'ffmpeg_path', 'outbound_proxy', 'github_token',
 		);
 
 		if ( function_exists( 'vmsai' ) && vmsai()->channels() ) {

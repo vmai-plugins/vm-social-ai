@@ -25,7 +25,6 @@ class VMSAI_Autoloader {
 		'includes/brain/',
 		'includes/channels/',
 		'admin/',
-		'includes/integrations/',
 	);
 
 	/**

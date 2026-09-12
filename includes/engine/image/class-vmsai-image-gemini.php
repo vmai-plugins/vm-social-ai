@@ -135,14 +135,23 @@ class VMSAI_Image_Gemini implements VMSAI_Image_Provider {
 
 				if ( ! empty( $fallback_res['json']['candidates'][0]['content']['parts'][0]['inlineData']['data'] ) ) {
 					$b64 = $fallback_res['json']['candidates'][0]['content']['parts'][0]['inlineData']['data'];
-					return array(
-						'ok'            => true,
-						'binary'        => base64_decode( $b64 ),
-						'url'           => '',
-						'mime'          => 'image/png',
-						'credit'        => 'Generated via Google Imagen (Fallback)',
-						'error'         => '',
-					);
+					// Strict decode + length sanity, mirroring the primary path
+					// above — a garbage/quoted string must not be accepted as
+					// a successful image payload.
+					$binary = base64_decode( $b64, true );
+					if ( $binary && strlen( $binary ) > 100 ) {
+						return array(
+							'ok'            => true,
+							'binary'        => $binary,
+							'url'           => '',
+							'mime'          => 'image/png',
+							'credit'        => 'Generated via Google Imagen (Fallback)',
+							'error'         => '',
+						);
+					}
+					if ( ! $binary ) {
+						$last_error = __( 'Gemini fallback returned an undecodable image payload.', 'vm-social-ai-pro' );
+					}
 				}
 
 				// If generateContent also fails with something other than "not found", keep that error.

@@ -14,12 +14,20 @@ class VMSAI_Portal {
 	}
 
 	public function render_portal() {
-		if ( ! isset($_GET['vmsai_portal']) ) return;
+		if ( ! isset( $_GET['vmsai_portal'] ) ) {
+			return;
+		}
+
+		// These were read unguarded: any request to ?vmsai_portal=1 without
+		// both params emitted warnings before the 403.
+		if ( ! isset( $_GET['id'], $_GET['token'] ) ) {
+			wp_die( 'Unauthorized or expired review link.', 'Social AI Portal', array( 'response' => 403 ) );
+		}
 
 		$queue_id = (int) $_GET['id'];
-		$token    = sanitize_text_field( $_GET['token'] );
+		$token    = sanitize_text_field( wp_unslash( $_GET['token'] ) );
 
-		if ( ! VMSAI_Crypto::verify_portal_token( $queue_id, $token ) ) {
+		if ( ! $queue_id || ! VMSAI_Crypto::verify_portal_token( $queue_id, $token ) ) {
 			wp_die( 'Unauthorized or expired review link.', 'Social AI Portal', array( 'response' => 403 ) );
 		}
 
@@ -27,6 +35,11 @@ class VMSAI_Portal {
 		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM " . VMSAI_Install::table('queue') . " WHERE id = %d", $queue_id ), ARRAY_A );
 
 		if ( ! $row ) wp_die( 'Post no longer exists.' );
+
+		// Only posts actually awaiting review may be acted on. Without this,
+		// a review link could flip a processing/failed/published row back to
+		// draft — effectively un-publishing live content.
+		$actionable = in_array( $row['status'], array( 'draft', 'approved' ), true );
 
 		$is_wl = (bool) VMSAI_Settings::get( 'white_label' );
 		$brand = $is_wl ? VMSAI_Settings::get( 'agency_name' ) : 'VM Social AI';
@@ -63,9 +76,13 @@ class VMSAI_Portal {
 				</div>
 
 				<div class="portal-media">
-					<?php if ( $row['media_url'] ): ?>
-						<img src="<?php echo esc_url($row['media_url']); ?>">
-					<?php else: ?>
+					<?php if ( $row['media_url'] ) : ?>
+						<?php if ( preg_match( '/\.(mp4|webm|mov|m4v)(\?|$)/i', (string) $row['media_url'] ) ) : ?>
+							<video src="<?php echo esc_url( $row['media_url'] ); ?>" controls playsinline preload="metadata"></video>
+						<?php else : ?>
+							<img src="<?php echo esc_url( $row['media_url'] ); ?>" alt="">
+						<?php endif; ?>
+					<?php else : ?>
 						<div style="color:#444;">No Preview Available</div>
 					<?php endif; ?>
 				</div>
@@ -74,14 +91,21 @@ class VMSAI_Portal {
 					<div style="font-size: 11px; text-transform: uppercase; color: #c9a227; font-weight: bold; margin-bottom: 10px;">Proposed Caption</div>
 					<div style="line-height: 1.6; font-size: 15px; white-space: pre-wrap;"><?php echo esc_html($row['body']); ?></div>
 
+					<?php if ( $actionable ) : ?>
 					<div class="portal-actions" id="portal-actions">
 						<button class="btn-approve" onclick="portalAction('approved')">Approve Post</button>
 						<button class="btn-reject" onclick="portalAction('draft')">Request Edits</button>
 					</div>
 					<div id="portal-status" style="display:none; text-align:center; padding: 20px; font-weight: bold;"></div>
+					<?php else : ?>
+					<div style="text-align:center; padding: 20px; color:#888;">
+						This post is not awaiting review (current status: <?php echo esc_html( $row['status'] ); ?>). This link is read-only.
+					</div>
+					<?php endif; ?>
 				</div>
 			</div>
 
+			<?php if ( $actionable ) : ?>
 			<script>
 				function portalAction(status) {
 					var reason = status === 'draft' ? prompt('What would you like to change?') : '';
@@ -96,8 +120,8 @@ class VMSAI_Portal {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({
-							id: <?php echo $queue_id; ?>,
-							token: '<?php echo $token; ?>',
+							id: <?php echo (int) $queue_id; ?>,
+							token: '<?php echo esc_js( $token ); ?>',
 							status: status,
 							reviewer_notes: reason
 						})
@@ -120,8 +144,9 @@ class VMSAI_Portal {
 						btnBox.style.pointerEvents = 'auto';
 					});
 				}
-			</script>
-		</body>
+				</script>
+				<?php endif; ?>
+			</body>
 		</html>
 		<?php
 		exit;

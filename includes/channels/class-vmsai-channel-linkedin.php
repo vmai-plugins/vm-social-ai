@@ -227,18 +227,22 @@ class VMSAI_Channel_Linkedin extends VMSAI_Channel {
 			return '';
 		}
 
-		$binary = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		// LinkedIn's upload endpoint requires the exact Content-Type of the
+		// asset — a bare Authorization header gets rejected with a 400. The
+		// file is streamed off disk rather than loaded into memory.
+		$filetype = wp_check_filetype( $path );
+		$mime     = ! empty( $filetype['type'] ) ? $filetype['type'] : 'image/jpeg';
 
-		$uploaded = VMSAI_Http::request(
+		$uploaded = VMSAI_Http::send_file(
 			'PUT',
 			$upload_url,
+			$path,
 			array(
-				'headers' => array( 'Authorization' => 'Bearer ' . VMSAI_Settings::credential( 'li_access_token' ) ),
-				'body'    => $binary,
-				'scope'   => 'channel.linkedin',
-				'timeout' => 120,
-				'retries' => 1,
-			)
+				'Authorization' => 'Bearer ' . VMSAI_Settings::credential( 'li_access_token' ),
+				'Content-Type'  => $mime,
+			),
+			'channel.linkedin',
+			120
 		);
 
 		return $uploaded['ok'] ? $asset : '';

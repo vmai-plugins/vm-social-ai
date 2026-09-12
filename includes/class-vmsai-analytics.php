@@ -54,8 +54,21 @@ class VMSAI_Analytics {
 
 			$metrics = $channel->fetch_metrics( $row );
 
-			if ( array_sum( $metrics ) <= 0 ) {
-				continue;
+			// Zero results are stored too — a flop must show up as 0 on the
+			// dashboard, not as "no data". But a post that has been all-zero
+			// for a week is dead; stop burning API calls re-polling it for
+			// the rest of the 30-day window.
+			if ( (int) array_sum( $metrics ) <= 0 ) {
+				$zero_recent = (int) $wpdb->get_var( $wpdb->prepare( // phpcs:ignore
+					"SELECT COUNT(*) FROM `" . VMSAI_Install::table( 'metrics' ) . "`
+					 WHERE queue_id = %d
+					 AND captured_on >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)
+					 AND (impressions + reach + engagements + clicks) = 0", // phpcs:ignore
+					(int) $row['id']
+				) );
+				if ( $zero_recent > 0 ) {
+					continue;
+				}
 			}
 
 			$wpdb->query( // phpcs:ignore
@@ -135,6 +148,11 @@ class VMSAI_Analytics {
 
 	/**
 	 * Adjust the Strategic Pillar Mix based on what is actually working.
+	 *
+	 * Writes both a fast transient (read every batch by
+	 * VMSAI_Planner::generate_batch()) and a durable option (read by the
+	 * dashboard/reporting UI), so the loop has an operational effect even
+	 * when the object cache drops transients.
 	 */
 	public static function double_down_on_winners() {
 		$performance = self::pillar_performance( 60 );
@@ -145,10 +163,19 @@ class VMSAI_Analytics {
 
 		VMSAI_Logger::info( 'analytics', "Self-Learning Loop: Best pillar is '{$best_pillar}', Worst is '{$worst_pillar}'. Adjusting strategy..." );
 
-		// Logic to update the Planner's default weights?
-		// Actually, let's update a transient that VMSAI_Planner reads.
 		set_transient( 'vmsai_winner_pillar', $best_pillar, DAY_IN_SECONDS * 7 );
 		set_transient( 'vmsai_loser_pillar', $worst_pillar, DAY_IN_SECONDS * 7 );
+
+		update_option(
+			'vmsai_pillar_ranking',
+			array(
+				'winner'     => $best_pillar,
+				'loser'      => $worst_pillar,
+				'ranking'    => $performance,
+				'updated_at' => current_time( 'mysql', true ),
+			),
+			false
+		);
 	}
 
 	/**

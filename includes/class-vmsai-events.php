@@ -82,7 +82,7 @@ class VMSAI_Events {
 		$this->inject_event(
 			sprintf( /* translators: %s: blog post title */ __( 'New blog post: %s', 'vm-social-ai-pro' ), $post->post_title ),
 			get_permalink( $id ),
-			'education',
+			'value', // must be one of VMSAI_Planner::pillars() — 'education' does not exist
 			$id,
 			$snippet
 		);

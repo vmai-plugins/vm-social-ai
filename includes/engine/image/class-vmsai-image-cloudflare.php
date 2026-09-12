@@ -28,12 +28,11 @@ class VMSAI_Image_Cloudflare implements VMSAI_Image_Provider {
 	}
 
 	/**
-	 * Configured when an account ID and API token exist.
+	 * Configured when a Cloudflare API token exists (the same token powers
+	 * Workers AI; r2_account_id alone — i.e. R2 storage only — is not enough).
 	 */
 	public function is_configured() {
-		$account_id = VMSAI_Settings::credential( 'r2_account_id' );
-		$token      = VMSAI_Settings::credential( 'cf_token' );
-		return '' !== $account_id && '' !== $token;
+		return '' !== VMSAI_Settings::credential( 'cf_token' );
 	}
 
 	/**
@@ -43,9 +42,16 @@ class VMSAI_Image_Cloudflare implements VMSAI_Image_Provider {
 		$account_id = VMSAI_Settings::credential( 'r2_account_id' );
 		$token      = VMSAI_Settings::credential( 'cf_token' );
 
-		// Using SDXL Lightning for the best speed/quality balance in the free tier.
-		$model = '@cf/bytedance/stable-diffusion-xl-lightning';
-		$url   = "https://api.cloudflare.com/client/v4/accounts/{$account_id}/ai/run/{$model}";
+		// Honour the model picked in the UI (list_models ids) so the list is
+		// not decorative. Full "@cf/..." ids pass through unchanged.
+		$model_key = (string) ( $args['model'] ?? '' );
+		$known     = array(
+			'stable-diffusion-xl-lightning' => '@cf/bytedance/stable-diffusion-xl-lightning',
+			'stable-diffusion-xl-base-1.0'  => '@cf/stabilityai/stable-diffusion-xl-base-1.0',
+		);
+		$model = $known[ $model_key ] ?? ( $model_key ?: '@cf/bytedance/stable-diffusion-xl-lightning' );
+
+		$url = "https://api.cloudflare.com/client/v4/accounts/{$account_id}/ai/run/{$model}";
 
 		$response = VMSAI_Http::post( $url, array(
 			'headers' => array(
@@ -53,7 +59,8 @@ class VMSAI_Image_Cloudflare implements VMSAI_Image_Provider {
 			),
 			'json'    => array(
 				'prompt' => $prompt,
-				'num_steps' => 4, // Optimized for Lightning model
+				// Lightning is distilled for 4 steps; the base model needs more.
+				'num_steps' => ( strpos( $model, 'lightning' ) !== false ) ? 4 : 20,
 			),
 			'timeout' => 90,
 			'scope'   => 'engine.image.cloudflare'

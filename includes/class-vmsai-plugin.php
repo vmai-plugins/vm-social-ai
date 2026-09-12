@@ -87,6 +87,10 @@ class VMSAI_Plugin {
 		( new VMSAI_Portal() )->register();
 		( new VMSAI_Telegram_Bot() )->register();
 
+		// Plugins-screen shortcut. action_links() must be wired here —
+		// defining the method alone never fires it.
+		add_filter( 'plugin_action_links_' . VMSAI_BASENAME, array( $this, 'action_links' ) );
+
 		// LOCALIZATION: Sync city insights hook
 		add_action( 'vmsai_sync_city_insights', array( 'VMSAI_Research', 'sync_city_insights' ) );
 

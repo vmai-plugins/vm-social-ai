@@ -26,6 +26,10 @@ class VMSAI_Rest {
 	/**
 	 * Capability check for every route.
 	 *
+	 * Read routes accept the matching custom cap; everything unmapped
+	 * requires manage_options (fail closed) — see routes() map.
+	 *
+	 * @param WP_REST_Request $request Request.
 	 * @return bool
 	 */
 	public function can_manage( $request ) {
@@ -33,12 +37,40 @@ class VMSAI_Rest {
 
 		// 1. Basic Read/Stats: Needs 'vmsai_read'
 		if ( strpos($route, '/stats') !== false ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/system/upcoming' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/system/activity' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/system/health' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/queue/list' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/pipeline/list' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/reporting/roi' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/research/trends' ) ) return current_user_can( 'vmsai_read' );
+		if ( false !== strpos( $route, '/plan/calendar' ) ) return current_user_can( 'vmsai_plan' );
+		if ( false !== strpos( $route, '/agents/list' ) ) return current_user_can( 'vmsai_edit' );
+		if ( false !== strpos( $route, '/agents/styles' ) ) return current_user_can( 'vmsai_edit' );
+		if ( false !== strpos( $route, '/compose/next-slot' ) ) return current_user_can( 'vmsai_edit' );
+		if ( false !== strpos( $route, '/campaign-gen/angles' ) ) return current_user_can( 'vmsai_edit' );
 
-		// 2. High-level planning/editing: Needs 'vmsai_edit'
+		// 2. High-level planning/editing: Needs 'vmsai_edit' / 'vmsai_plan'
 		if ( strpos($route, '/brain/') !== false ) return current_user_can( 'vmsai_edit' );
 		if ( strpos($route, '/agents/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/compose/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/campaign-gen/') !== false ) return current_user_can( 'vmsai_edit' );
 		if ( strpos($route, '/plan/') !== false ) return current_user_can( 'vmsai_plan' );
 		if ( strpos($route, '/queue/update') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/queue/regenerate') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/queue/regen-image') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/queue/delete') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/queue/bulk') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/inbox/') !== false ) {
+			if ( false !== strpos( $route, '/inbox/list' ) ) return current_user_can( 'vmsai_read' );
+			return current_user_can( 'vmsai_edit' );
+		}
+		if ( strpos($route, '/rag/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/commander/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/cache/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/lab/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/storage/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/system/test-all') !== false ) return current_user_can( 'vmsai_manage_keys' );
 
 		// 3. Publishing/Keys/Updates: Needs 'vmsai_publish', 'vmsai_manage_keys', or 'update_plugins'
 		if ( strpos($route, '/publish-now') !== false ) return current_user_can( 'vmsai_publish' );
@@ -100,7 +132,7 @@ class VMSAI_Rest {
 			'campaign-gen/draft'  => array( 'POST', 'campaign_gen_draft' ),
 			'campaign-gen/create' => array( 'POST', 'campaign_gen_create' ),
 			'campaign-gen/compose' => array( 'POST', 'campaign_gen_compose' ),
-			'queue/portal-update'  => array( 'POST', 'portal_update', array( $this, 'can_manage' ) ),
+			'queue/portal-update'  => array( 'POST', 'portal_update', '__return_true' ),
 			'system/test-all'      => array( 'POST', 'test_all' ),
 			'system/upcoming'      => array( 'GET', 'upcoming' ),
 			'system/activity'      => array( 'GET', 'recent_activity' ),
@@ -118,13 +150,16 @@ class VMSAI_Rest {
 		);
 
 		foreach ( $routes as $path => $config ) {
+			// Per-route permission wins: queue/portal-update ships its own
+			// token check so external clients without WP cookies can act.
+			$callback = isset( $config[2] ) && is_callable( $config[2] ) ? $config[2] : $auth;
 			register_rest_route(
 				self::NS,
 				'/' . $path,
 				array(
 					'methods'             => $config[0],
 					'callback'            => array( $this, $config[1] ),
-					'permission_callback' => $auth,
+					'permission_callback' => $callback,
 				)
 			);
 		}
@@ -867,13 +902,62 @@ class VMSAI_Rest {
 		return count( $ids );
 	}
 
+	/**
+	 * Stage a credential patch for a test request without committing it.
+	 * Returns a plaintext snapshot of the previous values so
+	 * restore_credentials() can roll back if the test fails — a failed test
+	 * must never clobber previously saved keys with a bad one.
+	 *
+	 * @param array $creds Credential patch (key => plaintext).
+	 * @return array|null Snapshot of previous values, or null when nothing staged.
+	 */
+	private function stage_credentials( array $creds ) {
+		if ( ! $creds ) {
+			return null;
+		}
+
+		$raw      = get_option( VMSAI_Settings::CRED_OPTION, array() );
+		$raw      = is_array( $raw ) ? $raw : array();
+		$snapshot = array();
+
+		foreach ( array_keys( $creds ) as $key ) {
+			$key = sanitize_key( (string) $key );
+			if ( '' === $key ) {
+				continue;
+			}
+			// Only snapshot keys that actually live in the encrypted store —
+			// values from constants or cross-plugin sync are not ours to
+			// overwrite, and an empty snapshot entry means "was unset".
+			$snapshot[ $key ] = array_key_exists( $key, $raw ) ? (string) VMSAI_Settings::credential( $key ) : '';
+		}
+
+		VMSAI_Settings::update_credentials( $creds );
+		return $snapshot;
+	}
+
+	/**
+	 * Roll back staged credentials after a failed test. Successful tests keep
+	 * the new values (that is the intended "type and test" flow).
+	 *
+	 * @param array|null $snapshot Result of stage_credentials().
+	 * @param bool       $test_ok  Whether the test succeeded.
+	 * @return void
+	 */
+	private function restore_credentials( $snapshot, $test_ok ) {
+		if ( ! $snapshot || $test_ok ) {
+			return;
+		}
+		VMSAI_Settings::update_credentials( $snapshot );
+		VMSAI_Logger::info( 'rest', 'Test failed — staged credentials were rolled back to the previously saved values.' );
+	}
+
 	public function test_engine( WP_REST_Request $request ) {
 		$which = sanitize_key( (string) $request->get_param( 'engine' ) );
 		$creds = (array) $request->get_param( 'credentials' );
 
-		if ( $creds ) {
-			VMSAI_Settings::update_credentials( $creds );
-		}
+		// Stage, don't commit: if the test fails, previously saved keys must
+		// not be clobbered by a bad one the user was trying out.
+		$saved = $this->stage_credentials( $creds );
 
 		if ( 'image' === $which ) {
 			$engine = (string) $request->get_param( 'provider' );
@@ -895,6 +979,8 @@ class VMSAI_Rest {
 
 			$res_data = is_array( $result ) ? $result : array();
 
+			$this->restore_credentials( $saved, ! empty( $res_data['ok'] ) );
+
 			return new WP_REST_Response(
 				array(
 					'ok'       => ! empty( $res_data['ok'] ),
@@ -914,6 +1000,8 @@ class VMSAI_Rest {
 		);
 
 		$res_text = is_array( $result ) ? $result : array();
+
+		$this->restore_credentials( $saved, ! empty( $res_text['ok'] ) );
 
 		return new WP_REST_Response(
 			array(
@@ -942,9 +1030,8 @@ class VMSAI_Rest {
 		$slug        = sanitize_key( (string) $request->get_param( 'provider' ) );
 		$creds       = (array) $request->get_param( 'credentials' );
 
-		if ( $creds ) {
-			VMSAI_Settings::update_credentials( $creds );
-		}
+		// Staged: a failed provider test rolls back to the previous keys.
+		$saved = $this->stage_credentials( $creds );
 
 		if ( 'image' === $engine_type ) {
 			self::purge_test_images();
@@ -975,13 +1062,17 @@ class VMSAI_Rest {
 
 			if ( $result['ok'] && ! empty( $result['binary'] ) ) {
 				$uploads  = wp_upload_dir();
-				$filename = 'vmsai-test-video-' . $slug . '.mp4';
+				$filename = 'vmsai-test-video-' . $slug . '-' . wp_generate_password( 8, false, false ) . '.mp4';
 				$path     = trailingslashit( $uploads['basedir'] ) . $filename;
 				file_put_contents( $path, $result['binary'] );
 				$url = trailingslashit( $uploads['baseurl'] ) . $filename;
 
+				$this->restore_credentials( $saved, true );
+
 				return new WP_REST_Response( array( 'ok' => true, 'url' => $url ), 200 );
 			}
+
+			$this->restore_credentials( $saved, false );
 
 			return new WP_REST_Response( array( 'ok' => false, 'message' => $result['error'] ?: 'Video generation failed.' ), 200 );
 		}
@@ -1021,9 +1112,8 @@ class VMSAI_Rest {
 	public function test_video( WP_REST_Request $request ) {
 		$creds = (array) $request->get_param( 'credentials' );
 
-		if ( $creds ) {
-			VMSAI_Settings::update_credentials( $creds );
-		}
+		// Staged: a failed test rolls back to the previous keys.
+		$saved = $this->stage_credentials( $creds );
 
 		$result = vmsai()->video_engine()->create(
 			'A cinematic drone shot of a beautiful tropical beach at sunset',
@@ -1032,13 +1122,19 @@ class VMSAI_Rest {
 
 		if ( $result['ok'] && ! empty( $result['binary'] ) ) {
 			$uploads  = wp_upload_dir();
-			$filename = 'vmsai-test-video-chain.mp4';
+			// Random suffix: predictable names in the public uploads root are
+			// enumerable. The vmsai-test-video-* glob is swept by cleanup_assets().
+			$filename = 'vmsai-test-video-chain-' . wp_generate_password( 8, false, false ) . '.mp4';
 			$path     = trailingslashit( $uploads['basedir'] ) . $filename;
 			file_put_contents( $path, $result['binary'] );
 			$url = trailingslashit( $uploads['baseurl'] ) . $filename;
 
+			$this->restore_credentials( $saved, true );
+
 			return new WP_REST_Response( array( 'ok' => true, 'url' => $url, 'tried' => $result['tried'] ?? array() ), 200 );
 		}
+
+		$this->restore_credentials( $saved, false );
 
 		return new WP_REST_Response( array( 'ok' => false, 'message' => $result['error'] ?: 'Video generation failed.', 'tried' => $result['tried'] ?? array() ), 200 );
 	}
@@ -1094,13 +1190,14 @@ class VMSAI_Rest {
 				return new WP_REST_Response( array( 'ok' => false, 'message' => __( 'Invalid channel.', 'vm-social-ai-pro' ) ), 200 );
 			}
 
-			// Pro Feature: Use submitted credentials for the test if provided.
+			// Pro Feature: Use submitted credentials for the test if provided —
+			// staged, not committed: a failed test rolls back so previously
+			// saved tokens are not clobbered by a bad one.
 			$creds = (array) $request->get_param( 'credentials' );
-			if ( $creds ) {
-				VMSAI_Settings::update_credentials( $creds );
-			}
+			$saved = $this->stage_credentials( $creds );
 
 			$result = $channel->test_connection();
+			$this->restore_credentials( $saved, ! empty( $result['ok'] ) );
 
 			return new WP_REST_Response( $result, 200 );
 		} catch ( Throwable $e ) {

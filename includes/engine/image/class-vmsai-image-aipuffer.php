@@ -229,10 +229,16 @@ class VMSAI_Image_Aipuffer implements VMSAI_Image_Provider {
 			if ( class_exists( '\WPAICG\AIPKit_Providers' ) ) {
 				$types = array( 'OpenAI', 'GoogleImage', 'xAIImage' );
 				foreach ( $types as $t ) {
-					// Some are methods, some are catalog entries.
+					// Some are methods, some are catalog entries. method_exists
+					// is required on top of class_exists: AIPKit versions that
+					// dropped/renamed these statics would otherwise fatal the
+					// engines screen outright.
 					$list = array();
-					if ( 'OpenAI' === $t ) $list = \WPAICG\AIPKit_Providers::get_openai_image_models();
-					else $list = \WPAICG\AIPKit_Providers::get_model_list( $t );
+					if ( 'OpenAI' === $t && method_exists( '\WPAICG\AIPKit_Providers', 'get_openai_image_models' ) ) {
+						$list = \WPAICG\AIPKit_Providers::get_openai_image_models();
+					} elseif ( method_exists( '\WPAICG\AIPKit_Providers', 'get_model_list' ) ) {
+						$list = \WPAICG\AIPKit_Providers::get_model_list( $t );
+					}
 
 					if ( is_array( $list ) ) {
 						foreach ( $list as $m ) {

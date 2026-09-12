@@ -57,6 +57,36 @@ class VMSAI_Composer {
 				'hashtags' => 3,
 				'brief'    => 'Write a Shorts title under 60 characters plus a description. The title carries the search weight — front-load the keyword.',
 			),
+			'threads'   => array(
+				'limit'    => 500,
+				'sweet'    => 380,
+				'hashtags' => 3,
+				'brief'    => 'Conversational and quick. Threads rewards replies, so end with a genuine question or a take people can react to. No link walls.',
+			),
+			'bluesky'   => array(
+				'limit'    => 300,
+				'sweet'    => 260,
+				'hashtags' => 2,
+				'brief'    => 'Tight and text-first — the hard limit is 300 characters. One idea, one link, hashtags sparingly at the end.',
+			),
+			'tiktok'    => array(
+				'limit'    => 2200,
+				'sweet'    => 150,
+				'hashtags' => 5,
+				'brief'    => 'This caption rides a video, so hook in the first 40 characters — that is all viewers see before the video takes over. Short, punchy, trend-aware. Hashtags at the end.',
+			),
+			'telegram'  => array(
+				'limit'    => 4096,
+				'sweet'    => 900,
+				'hashtags' => 3,
+				'brief'    => 'A broadcast channel, not a feed. Structured and skimmable: bold key lines, short paragraphs, one clear call to action. Use **bold** markers for emphasis.',
+			),
+			'pinterest' => array(
+				'limit'    => 500,
+				'sweet'    => 300,
+				'hashtags' => 3,
+				'brief'    => 'This is search, not social. Front-load the keywords someone would actually type, describe what the pin shows, and keep hashtags minimal at the end.',
+			),
 		);
 	}
 

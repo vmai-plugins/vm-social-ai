@@ -94,15 +94,19 @@ class VMSAI_License {
 			return true;
 		}
 
-		// TEST KEYS for local development
-		if ( 'VM-PRO-TEST' === $key ) {
-			update_option( 'vmsai_license', array( 'plan' => 'pro', 'status' => 'active', 'key' => $key ) );
-			return true;
-		}
+		// TEST KEYS for local development only. These are gated behind an
+		// explicit dev constant: the plugin source is readable, so shipping
+		// universal keys in the production build is a license bypass.
+		if ( defined( 'VMSAI_DEV_TEST_KEYS' ) && VMSAI_DEV_TEST_KEYS ) {
+			if ( 'VM-PRO-TEST' === $key ) {
+				update_option( 'vmsai_license', array( 'plan' => 'pro', 'status' => 'active', 'key' => $key ) );
+				return true;
+			}
 
-		if ( 'VM-ELITE-TEST' === $key ) {
-			update_option( 'vmsai_license', array( 'plan' => 'elite', 'status' => 'active', 'key' => $key ) );
-			return true;
+			if ( 'VM-ELITE-TEST' === $key ) {
+				update_option( 'vmsai_license', array( 'plan' => 'elite', 'status' => 'active', 'key' => $key ) );
+				return true;
+			}
 		}
 
 		// LOCAL BRIDGE: If the License Manager is on the SAME site, talk to its REST endpoint via internal request.

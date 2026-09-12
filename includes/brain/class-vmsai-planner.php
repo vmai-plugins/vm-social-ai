@@ -285,8 +285,19 @@ class VMSAI_Planner {
 		$pillars = self::pillars();
 
 		// SELF-LEARNING LOOP: Adjust weights based on performance data.
+		// Transients are fast but volatile — fall back to the durable
+		// option written by Analytics::double_down_on_winners().
 		$winner = get_transient( 'vmsai_winner_pillar' );
 		$loser  = get_transient( 'vmsai_loser_pillar' );
+		if ( ! $winner || ! $loser ) {
+			$ranking = get_option( 'vmsai_pillar_ranking', array() );
+			if ( ! $winner && ! empty( $ranking['winner'] ) ) {
+				$winner = $ranking['winner'];
+			}
+			if ( ! $loser && ! empty( $ranking['loser'] ) ) {
+				$loser = $ranking['loser'];
+			}
+		}
 
 		if ( $winner && isset( $pillars[ $winner ] ) ) {
 			$pillars[ $winner ]['weight'] += 15;

@@ -68,7 +68,7 @@ class VMSAI_Scheduler {
 		$path = $uploads['basedir'];
 
 		// 1. Delete temporary video/audio binaries older than 48 hours
-		$patterns = array( $path . '/vmsai-prod-*.mp4', $path . '/vmsai-raw-*.mp4', $path . '/vmsai-tts-*.mp3' );
+		$patterns = array( $path . '/vmsai-prod-*.mp4', $path . '/vmsai-raw-*.mp4', $path . '/vmsai-tts-*.mp3', $path . '/vmsai-test-video-*.mp4' );
 		foreach ( $patterns as $pattern ) {
 			foreach ( glob( $pattern ) as $file ) {
 				if ( is_file( $file ) && ( time() - filemtime( $file ) ) > ( 2 * DAY_IN_SECONDS ) ) {
@@ -78,10 +78,12 @@ class VMSAI_Scheduler {
 		}
 
 		// 2. Delete local images that have been offloaded to R2 (older than 7 days)
+		// Only published posts qualify: drafts/failed rows have
+		// published_at IS NULL and may still need their assets.
 		if ( 'off' !== VMSAI_Settings::get( 'remote_storage' ) ) {
 			global $wpdb;
 			$table = VMSAI_Install::table( 'queue' );
-			$rows = $wpdb->get_results( "SELECT media_id FROM `$table` WHERE media_id > 0 AND (published_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) OR published_at IS NULL)" );
+			$rows = $wpdb->get_results( "SELECT media_id FROM `$table` WHERE media_id > 0 AND status = 'published' AND published_at IS NOT NULL AND published_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)" );
 
 			foreach ( $rows as $row ) {
 				$media_id = (int) $row->media_id;
@@ -155,12 +157,16 @@ class VMSAI_Scheduler {
 	 * @param array $schedules Existing schedules.
 	 * @return array
 	 */
+	/**
+	 * Legacy alias kept for backward compatibility. The canonical
+	 * implementation lives in VMSAI_Install::add_schedules(); this simply
+	 * delegates so any third-party code still calling it keeps working.
+	 *
+	 * @param array $schedules Registered schedules.
+	 * @return array
+	 */
 	public function add_schedule( $schedules ) {
-		$schedules['vmsai_five_minutes'] = array(
-			'interval' => 300,
-			'display'  => __( 'Every five minutes (VM Social AI)', 'vm-social-ai-pro' ),
-		);
-		return $schedules;
+		return VMSAI_Install::add_schedules( $schedules );
 	}
 
 	/**
@@ -252,21 +258,31 @@ class VMSAI_Scheduler {
 				);
 				VMSAI_Logger::error( 'scheduler', 'Composition failed permanently for a slot.', array( 'slot' => $slot['id'], 'error' => $result['error'] ) );
 			} else {
-				// Exponential backoff: 5 minutes, then 20 minutes, then 80 minutes...
+				// Exponential backoff with a small jitter: 5 min, 20 min,
+				// 80 min ... Push slot_date forward so the retry is not
+				// eligible for compose_due() until the delay has elapsed.
+				// (Previously $delay was computed but never applied, so
+				// every retry ran on the very next tick.)
 				$delay = 5 * MINUTE_IN_SECONDS * ( 4 ** ( $attempts - 1 ) );
+				$jitter = wp_rand( 0, 5 * MINUTE_IN_SECONDS );
+				$retry_after = gmdate( 'Y-m-d H:i:s', time() + $delay + $jitter );
+				$retry_date  = gmdate( 'Y-m-d', time() + $delay + $jitter );
+				$retry_time  = gmdate( 'H:i:s', time() + $delay + $jitter );
 				$wpdb->update( // phpcs:ignore
 					$plan_table,
 					array(
 						'attempts'     => $attempts,
 						'last_error'   => mb_substr( $result['error'], 0, 500 ),
 						'status'       => 'planned',
+						'slot_date'    => $retry_date,
+						'slot_time'    => $retry_time,
 						'updated_at'   => current_time( 'mysql', true ),
 					),
 					array( 'id' => (int) $slot['id'] ),
-					array( '%d', '%s', '%s', '%s' ),
+					array( '%d', '%s', '%s', '%s', '%s', '%s' ),
 					array( '%d' )
 				);
-				VMSAI_Logger::warn( 'scheduler', 'Composition failed, will retry later.', array( 'slot' => $slot['id'], 'attempt' => $attempts, 'error' => $result['error'] ) );
+				VMSAI_Logger::warn( 'scheduler', 'Composition failed, will retry later.', array( 'slot' => $slot['id'], 'attempt' => $attempts, 'retry_after' => $retry_after, 'error' => $result['error'] ) );
 			}
 		}
 
@@ -300,9 +316,30 @@ class VMSAI_Scheduler {
 		$manager   = vmsai()->channels();
 		$published = 0;
 
+		// Cap dispatch across channels, not just globally: without this a
+		// single hot channel can eat the whole daily budget in one tick.
+		$daily_cap       = max( 1, (int) VMSAI_Settings::get( 'daily_post_cap', 24 ) );
+		$channel_count   = max( 1, count( $manager->all() ) );
+		$per_channel_cap = max( 1, (int) ceil( $daily_cap / $channel_count ) );
+
+		$published_by_channel = array();
+		foreach ( (array) $wpdb->get_results( // phpcs:ignore
+			"SELECT channel, COUNT(*) AS c FROM `$table` WHERE status = 'published' AND published_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY) GROUP BY channel",
+			ARRAY_A
+		) as $count_row ) {
+			$published_by_channel[ $count_row['channel'] ] = (int) $count_row['c'];
+		}
+
 		foreach ( $rows as $row ) {
 			if ( $this->is_quiet_hours() ) {
 				break;
+			}
+
+			// Per-channel cap: skip this row (leave it approved and due) once
+			// the channel has hit its share of today's published posts.
+			$channel_published = (int) ( $published_by_channel[ $row['channel'] ] ?? 0 );
+			if ( $channel_published >= $per_channel_cap ) {
+				continue;
 			}
 
 			// Mark as processing immediately to prevent re-selection.
@@ -321,6 +358,10 @@ class VMSAI_Scheduler {
 			}
 
 			if ( ! VMSAI_Circuit::is_open( 'channel:' . $row['channel'] ) ) {
+				// Breaker is soft: revert to approved so the row is retried
+				// on a later tick instead of stranding in processing.
+				$wpdb->update( $table, array( 'status' => 'approved', 'last_error' => __( 'Paused: channel circuit breaker is open.', 'vm-social-ai-pro' ), 'updated_at' => current_time( 'mysql', true ) ), array( 'id' => (int) $row['id'] ) );
+				VMSAI_Logger::warn( 'scheduler', 'Dispatch paused: channel circuit breaker is open.', array( 'queue' => $row['id'], 'channel' => $row['channel'] ) );
 				continue;
 			}
 
@@ -352,6 +393,7 @@ class VMSAI_Scheduler {
 				);
 
 				$published++;
+				$published_by_channel[ $row['channel'] ] = ( $published_by_channel[ $row['channel'] ] ?? 0 ) + 1;
 
 				if ( ! empty( $row['first_comment'] ) && ! empty( $result['remote_id'] ) ) {
 					$channel->post_comment( $result['remote_id'], (string) $row['first_comment'] );
@@ -548,6 +590,9 @@ class VMSAI_Scheduler {
 		$plan  = VMSAI_Install::table( 'plan' );
 
 		// Find evergreen posts published > 90 days ago that aren't already in the upcoming plan.
+		// NOT EXISTS avoids the NULL pitfall of NOT IN: if the subquery ever
+		// returns a NULL topic, NOT IN evaluates to UNKNOWN for every row
+		// and recycling silently stops.
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			"SELECT q.*, p.pillar, p.keyword, p.topic
 			 FROM `$queue` q
@@ -555,7 +600,8 @@ class VMSAI_Scheduler {
 			 WHERE q.is_evergreen = 1
 			 AND q.status = 'published'
 			 AND q.published_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)
-			 AND p.topic NOT IN (SELECT topic FROM `$plan` WHERE status = 'planned')
+			 AND p.topic IS NOT NULL
+			 AND NOT EXISTS (SELECT 1 FROM `$plan` p2 WHERE p2.status = 'planned' AND p2.topic = p.topic)
 			 LIMIT 5"
 		), ARRAY_A );
 

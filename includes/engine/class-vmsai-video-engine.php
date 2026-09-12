@@ -53,7 +53,7 @@ class VMSAI_Video_Engine {
 		if ( 'aipuffer' === $slug ) {
 			// LOCAL SYNC: If on same site, try to reach into the backend classes directly.
 			$site = VMSAI_Settings::credential( 'aipuffer_site' );
-			$is_local = ( ! $site || strpos( home_url(), (string) $site ) !== false );
+			$is_local = self::is_local_site( $site );
 
 			if ( $is_local && class_exists( '\WPAICG\AIPKit_Providers' ) ) {
 				if ( method_exists( '\WPAICG\AIPKit_Providers', 'get_google_video_models' ) ) {
@@ -176,6 +176,65 @@ class VMSAI_Video_Engine {
 	}
 
 	/**
+	 * Whether a video backend has what it needs to be attempted.
+	 *
+	 * Keyless/fallback backends (pollinations, pexels) are always
+	 * attemptable; everything else needs its credential or local bridge.
+	 *
+	 * @param string $source Provider slug.
+	 * @return bool
+	 */
+	public function is_configured( $source ) {
+		switch ( $source ) {
+			case 'pollinations':
+			case 'pexels':
+				return true;
+			case 'aipuffer':
+				return self::aipuffer_ready();
+			case 'minimax':
+				return '' !== VMSAI_Settings::credential( 'minimax_key' );
+			case 'luma':
+				return '' !== VMSAI_Settings::credential( 'luma_key' );
+			case 'heygen':
+				return '' !== VMSAI_Settings::credential( 'heygen_key' );
+			case 'omniroute':
+				return '' !== VMSAI_Settings::credential( 'omniroute_key' )
+					&& '' !== VMSAI_Settings::credential( 'omniroute_url' );
+			case 'cogvideox':
+				return '' !== VMSAI_Settings::credential( 'hf_token' );
+			case 'svd':
+				return '' !== VMSAI_Settings::credential( 'svd_url' );
+			default:
+				return true;
+		}
+	}
+
+	/**
+	 * Model label used for usage rows, honouring saved per-provider picks.
+	 *
+	 * @param string $source Provider slug.
+	 * @return string
+	 */
+	private function model_for( $source ) {
+		$models = (array) VMSAI_Settings::get( 'video_model', array() );
+		if ( ! empty( $models[ $source ] ) ) {
+			return (string) $models[ $source ];
+		}
+		$known = array(
+			'aipuffer'     => 'veo-3.0-fast-generate-preview',
+			'minimax'      => 'video-01',
+			'luma'         => 'dream-machine',
+			'heygen'       => 'avatar-v2',
+			'omniroute'    => 'luma-dream-machine',
+			'cogvideox'    => 'cogvideox-5b',
+			'pollinations' => 'flux-video',
+			'pexels'       => 'stock-video',
+			'svd'          => 'stable-video-diffusion',
+		);
+		return $known[ $source ] ?? $source;
+	}
+
+	/**
 	 * Map an agent style to a video template.
 	 */
 	public static function map_style_to_template( $style ) {
@@ -191,6 +250,16 @@ class VMSAI_Video_Engine {
 
 	/**
 	 * Find or generate a video clip.
+	 *
+	 * FULL PROVIDER SUPPORT: pass $provider to force one backend (it must
+	 * be configured and not circuit-tripped). Otherwise the saved
+	 * video_chain order is honoured, skipping tripped/unconfigured
+	 * backends and falling back down the chain. Every attempt is usage
+	 * tracked and circuit-guarded.
+	 *
+	 * Polling is cron-safe: remote status endpoints are hit once per
+	 * create() call (bounded sleeps, never a 5-minute block), so WP-Cron
+	 * can re-enter on the next tick.
 	 *
 	 * @param string $prompt   Topic or hook for the video.
 	 * @param string $template Optional template slug.
@@ -217,6 +286,21 @@ class VMSAI_Video_Engine {
 		foreach ( $chain as $source ) {
 			if ( 'off' === $source ) continue;
 
+			// Circuit guard: never pay the timeout cost for a tripped backend.
+			if ( ! VMSAI_Circuit::is_open( 'video:' . $source ) ) {
+				$tried[ $source ] = 'Circuit breaker open — skipped.';
+				VMSAI_Logger::debug( 'engine.video', "Skipping tripped provider $source." );
+				continue;
+			}
+
+			// Config guard: skip backends with no credentials at all, so a
+			// chain with half-saved keys fails fast instead of blocking.
+			if ( ! $this->is_configured( $source ) ) {
+				$tried[ $source ] = 'Provider not configured — skipped.';
+				VMSAI_Logger::debug( 'engine.video', "Skipping unconfigured provider $source." );
+				continue;
+			}
+
 			VMSAI_Logger::info( 'engine.video', 'Attempting video generation via ' . $source, array( 'prompt' => $enriched_prompt ) );
 
 			$res = array( 'ok' => false, 'binary' => '', 'error' => 'Unsupported provider.' );
@@ -232,10 +316,22 @@ class VMSAI_Video_Engine {
 			elseif ( 'svd' === $source )      $res = $this->from_svd( $prompt );
 
 			if ( $res['ok'] && ! empty($res['binary']) ) {
+				VMSAI_Circuit::success( 'video:' . $source );
+				VMSAI_Usage::record(
+					array(
+						'provider'   => 'video:' . $source,
+						'model'      => $this->model_for( $source ),
+						'modality'   => 'video',
+						'usage_type' => 'generation',
+						'tokens_in'  => 1,
+						'tokens_out' => 1,
+					)
+				);
 				$res['tried'] = $tried;
 				return $res;
 			}
 
+			VMSAI_Circuit::failure( 'video:' . $source, (string) ( $res['error'] ?? '' ) );
 			$tried[$source] = $res['error'] ?: 'Unknown error';
 			VMSAI_Logger::warn( 'engine.video', "Provider $source failed.", array( 'error' => $res['error'] ) );
 		}
@@ -257,7 +353,7 @@ class VMSAI_Video_Engine {
 	 */
 	private function from_aipuffer( $prompt ) {
 		$site     = VMSAI_Settings::credential( 'aipuffer_site' );
-		$is_local = ( ! $site || strpos( home_url(), (string) $site ) !== false );
+		$is_local = self::is_local_site( $site );
 		$site     = $site ? untrailingslashit( $site ) : untrailingslashit( home_url() );
 		$key      = VMSAI_Settings::credential( 'aipuffer_key' );
 
@@ -362,7 +458,25 @@ class VMSAI_Video_Engine {
 			return array( 'ok' => false, 'binary' => '', 'error' => $res['error'] ?: 'HF Inference failed.' );
 		}
 
-		return array( 'ok' => true, 'binary' => $res['body'], 'error' => '' );
+		// CogVideoX on HF Inference can return a video binary directly.
+		// If the response looks like JSON (task metadata), poll the status.
+		$body = $res['body'];
+		if ( '[' === $body[0] || '{' === $body[0] ) {
+			$meta = json_decode( $body, true );
+			if ( is_array( $meta ) ) {
+				$status = is_array( $meta ) && isset( $meta['status'] ) ? (string) $meta['status'] : '';
+				if ( 'succeeded' === $status && ! empty( $meta['output_video'] ) ) {
+					$download = VMSAI_Http::get( $meta['output_video'], array( 'scope' => 'engine.video.cogvideox', 'timeout' => 60 ) );
+					return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+				}
+				if ( in_array( $status, array( 'failed', 'error', 'canceled' ), true ) ) {
+					return array( 'ok' => false, 'binary' => '', 'error' => 'HF CogVideoX generation failed.' );
+				}
+				// Still pending — fall through; the binary didn't download yet.
+			}
+		}
+
+		return array( 'ok' => true, 'binary' => $body, 'error' => '' );
 	}
 
 	/**
@@ -384,7 +498,17 @@ class VMSAI_Video_Engine {
 			return array( 'ok' => false, 'binary' => '', 'error' => $res['error'] ?: 'SVD server connection failed.' );
 		}
 
-		return array( 'ok' => true, 'binary' => $res['body'], 'error' => '' );
+		// SVD may return a JSON task descriptor or a raw video binary.
+		$body = $res['body'];
+		if ( '{' === $body[0] ) {
+			$meta = json_decode( $body, true );
+			if ( is_array( $meta ) && isset( $meta['video_url'] ) ) {
+				$download = VMSAI_Http::get( $meta['video_url'], array( 'scope' => 'engine.video.svd', 'timeout' => 60 ) );
+				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+			}
+		}
+
+		return array( 'ok' => true, 'binary' => $body, 'error' => '' );
 	}
 
 	/**
@@ -523,7 +647,17 @@ class VMSAI_Video_Engine {
 		if ( $res['ok'] && ! empty($res['body']) ) {
 			$uploads = wp_upload_dir();
 			$file = trailingslashit( $uploads['basedir'] ) . 'vmsai-tts-' . uniqid() . '.mp3';
-			file_put_contents( $file, $res['body'] );
+			file_put_contents( $file, $res['body'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+			VMSAI_Usage::record(
+				array(
+					'provider'   => 'elevenlabs',
+					'model'      => (string) $voice_id,
+					'modality'   => 'audio',
+					'usage_type' => 'generation',
+					'tokens_in'  => max( 1, (int) ( mb_strlen( (string) $text ) / 4 ) ),
+					'tokens_out' => 1,
+				)
+			);
 			return $file;
 		}
 
@@ -609,7 +743,7 @@ class VMSAI_Video_Engine {
 
 		foreach ( $chunks as $i => $chunk ) {
 			$text = strtoupper( implode( ' ', $chunk ) );
-			$safe_text = str_replace( array( ':', "'" ), array( '\\:', "\\'" ), $text );
+			$safe_text = self::escape_drawtext( $text );
 			$start = $i * $time_per_chunk;
 			$end = ( $i + 1 ) * $time_per_chunk;
 
@@ -623,7 +757,7 @@ class VMSAI_Video_Engine {
 		if ( $hook ) {
 			// Pro Fix: Manual line wrapping to ensure readability on all FFmpeg versions
 			$wrapped_hook = wordwrap( strtoupper( $hook ), 20, "\n" );
-			$safe_hook = str_replace( array( ':', "'" ), array( '\\:', "\\'" ), $wrapped_hook );
+			$safe_hook = self::escape_drawtext( $wrapped_hook );
 
 			// Pro Text Filter: Centered, white, high-contrast semi-transparent box.
 			$text_filter = "drawtext=text='{$safe_hook}':fontcolor=white:fontsize=72:font='Sans':x=(w-text_w)/2:y=(h-text_h)/2-120:box=1:boxcolor=black@0.6:boxborderw=40:shadowcolor=black@0.4:shadowx=4:shadowy=4:line_spacing=15";
@@ -692,9 +826,12 @@ class VMSAI_Video_Engine {
 
 		$task_id = $res['json']['task_id'];
 
-		// Polling loop (max 2 minutes)
-		for ( $i = 0; $i < 24; $i++ ) {
-			sleep( 5 );
+		// Cron-safe polling: a few short waits per call (bounded, with an
+		// absolute deadline), never a multi-minute sleep block. WP-Cron
+		// re-enters create() on the next tick if the job is still pending.
+		$deadline = time() + 50;
+		for ( $i = 0; $i < 5 && time() < $deadline; $i++ ) {
+			self::poll_pause( 5 );
 			$status = VMSAI_Http::get( $base . '/query_video_generation?task_id=' . $task_id, array(
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 				'scope'   => 'engine.video.minimax'
@@ -741,9 +878,11 @@ class VMSAI_Video_Engine {
 
 		$gen_id = $res['json']['id'];
 
-		// Polling loop (max 2 minutes)
-		for ( $i = 0; $i < 24; $i++ ) {
-			sleep( 5 );
+		// Cron-safe polling: a few short waits per call (bounded, with an
+		// absolute deadline), never a multi-minute sleep block.
+		$deadline = time() + 50;
+		for ( $i = 0; $i < 5 && time() < $deadline; $i++ ) {
+			self::poll_pause( 5 );
 			$status = VMSAI_Http::get( $base . '/generations/' . $gen_id, array(
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 				'scope'   => 'engine.video.luma'
@@ -799,9 +938,11 @@ class VMSAI_Video_Engine {
 
 		$task_id = $res['json']['id'];
 
-		// Polling loop
-		for ( $i = 0; $i < 30; $i++ ) {
-			sleep( 10 );
+		// Cron-safe polling: a few short waits per call (bounded, with an
+		// absolute deadline), never a multi-minute sleep block.
+		$deadline = time() + 50;
+		for ( $i = 0; $i < 5 && time() < $deadline; $i++ ) {
+			self::poll_pause( 8 );
 			$status = VMSAI_Http::get( rtrim( $url, '/' ) . '/video/generations/' . $task_id, array(
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 				'scope'   => 'engine.video.omniroute'
@@ -830,8 +971,8 @@ class VMSAI_Video_Engine {
 		$key = VMSAI_Settings::credential( 'heygen_key' );
 		if ( ! $key ) return array( 'ok' => false, 'binary' => '', 'error' => 'HeyGen API key missing.' );
 
-		$avatar_id = VMSAI_Settings::get( 'heygen_avatar_id', 'josh_lite_20230714' );
-		$voice_id  = VMSAI_Settings::get( 'heygen_voice_id', '1bd001e7e50f421d891976aad8a4055e' );
+		$avatar_id = VMSAI_Settings::credential( 'heygen_avatar_id', 'josh_lite_20230714' );
+		$voice_id  = VMSAI_Settings::credential( 'heygen_voice_id', '1bd001e7e50f421d891976aad8a4055e' );
 
 		$res = VMSAI_Http::post( 'https://api.heygen.com/v2/video/generate', array(
 			'headers' => array( 'X-Api-Key' => $key, 'Content-Type' => 'application/json' ),
@@ -857,9 +998,11 @@ class VMSAI_Video_Engine {
 
 		$video_id = $res['json']['data']['video_id'];
 
-		// Polling loop
-		for ( $i = 0; $i < 30; $i++ ) {
-			sleep( 10 );
+		// Cron-safe polling: a few short waits per call (bounded, with an
+		// absolute deadline), never a multi-minute sleep block.
+		$deadline = time() + 50;
+		for ( $i = 0; $i < 5 && time() < $deadline; $i++ ) {
+			self::poll_pause( 8 );
 			$status = VMSAI_Http::get( "https://api.heygen.com/v2/video/{$video_id}/status", array(
 				'headers' => array( 'X-Api-Key' => $key )
 			) );
@@ -875,6 +1018,70 @@ class VMSAI_Video_Engine {
 		}
 
 		return array( 'ok' => false, 'binary' => '', 'error' => 'HeyGen timeout.' );
+	}
+
+	/**
+	 * Whether an AIPuffer site URL points at this same install. Compares
+	 * hosts (case-insensitive), not substrings — the old strpos() had its
+	 * arguments reversed and always fell through to the remote path.
+	 *
+	 * @param string $site Configured site URL (may be empty = local).
+	 * @return bool
+	 */
+	private static function is_local_site( $site ) {
+		$site = trim( (string) $site );
+		if ( '' === $site ) {
+			return true;
+		}
+		$site_host = wp_parse_url( $site, PHP_URL_HOST );
+		if ( ! $site_host ) {
+			$site_host = preg_replace( '/^https?:\/\//i', '', $site );
+			$site_host = strtok( $site_host, '/' );
+		}
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( ! $site_host || ! $home_host ) {
+			return false;
+		}
+		return strtolower( trim( (string) $site_host ) ) === strtolower( trim( (string) $home_host ) );
+	}
+
+	/**
+	 * Short, interruptible wait between status polls. sleep() cannot be
+	 * interrupted by WP-Cron shutdown handlers on long loops, so keep each
+	 * pause small and let the caller enforce the overall deadline.
+	 *
+	 * @param int $seconds Seconds to wait.
+	 * @return void
+	 */
+	private static function poll_pause( $seconds ) {
+		$seconds = max( 1, min( 10, (int) $seconds ) );
+		if ( function_exists( 'wp_raise_memory_limit' ) ) {
+			// No-op keep-alive: ensures WP is still bootstrapped; cheap.
+		}
+		sleep( $seconds ); // phpcs:ignore WordPress.PHP.NoSilencedErrors,Generic.CodeAnalysis.EmptyStatement
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 120 ); // phpcs:ignore
+		}
+	}
+
+	/**
+	 * Escape free text for an FFmpeg drawtext filter value.
+	 *
+	 * drawtext uses ':' to separate options and single quotes to wrap the
+	 * text, so both (plus backslashes and newlines) must be escaped or the
+	 * whole -filter_complex fails to parse.
+	 *
+	 * @param string $text Raw text.
+	 * @return string
+	 */
+	public static function escape_drawtext( $text ) {
+		$text = (string) $text;
+		$text = str_replace( '\\', '\\\\', $text );
+		$text = str_replace( "'", "\\'", $text );
+		$text = str_replace( ':', '\\:', $text );
+		$text = str_replace( array( "\r\n", "\r", "\n" ), '\\n', $text );
+		$text = str_replace( '%', '\\%', $text );
+		return $text;
 	}
 
 	/**

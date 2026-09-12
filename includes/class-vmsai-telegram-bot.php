@@ -47,7 +47,8 @@ class VMSAI_Telegram_Bot {
 	}
 
 	/**
-	 * Handle incoming messages from Telegram.
+	 * Handle incoming messages from Telegram. Rejects anything not from the
+	 * paired owner chat or not signed for the configured bot.
 	 */
 	public function handle_webhook( WP_REST_Request $request ) {
 		$data = $request->get_json_params();
@@ -61,8 +62,8 @@ class VMSAI_Telegram_Bot {
 		}
 
 		$msg     = $data['message'];
-		$chat_id = $msg['chat']['id'];
-		$text    = $msg['text'] ?? '';
+		$chat_id = isset( $msg['chat']['id'] ) ? (int) $msg['chat']['id'] : 0;
+		$text    = isset( $msg['text'] ) ? (string) $msg['text'] : '';
 
 		// 2. Command: /start (Secure the bot)
 		if ( strpos( $text, '/start' ) === 0 ) {
@@ -102,11 +103,23 @@ class VMSAI_Telegram_Bot {
 	}
 
 	private function handle_callback( $query ) {
-		$chat_id = $query['message']['chat']['id'];
-		$data    = $query['data']; // Format: action:id
+		$chat_id = isset( $query['message']['chat']['id'] ) ? (int) $query['message']['chat']['id'] : 0;
+
+		// Security: callbacks change post state — require the paired owner,
+		// exactly like the message path. Reject forged/foreign chats.
+		$owner = (int) VMSAI_Settings::get( 'telegram_owner_id' );
+		if ( $owner <= 0 || $chat_id !== $owner ) {
+			return new WP_REST_Response( array( 'ok' => true ), 200 );
+		}
+
+		$data    = isset( $query['data'] ) ? (string) $query['data'] : ''; // Format: action:id
 		$parts   = explode( ':', $data );
-		$action  = $parts[0];
-		$id      = (int) $parts[1];
+		$action  = isset( $parts[0] ) ? sanitize_key( $parts[0] ) : '';
+		$id      = isset( $parts[1] ) ? (int) $parts[1] : 0;
+
+		if ( $id <= 0 || ! in_array( $action, array( 'approve', 'reject' ), true ) ) {
+			return new WP_REST_Response( array( 'ok' => true ), 200 );
+		}
 
 		global $wpdb;
 		$table = VMSAI_Install::table( 'queue' );

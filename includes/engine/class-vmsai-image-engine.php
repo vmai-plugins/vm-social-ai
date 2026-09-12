@@ -32,6 +32,11 @@ class VMSAI_Image_Engine {
 		'linkedin'  => array( 1200, 627 ),
 		'gbp'       => array( 1200, 900 ),
 		'youtube'   => array( 1080, 1920 ),
+		'threads'   => array( 1080, 1350 ),
+		'bluesky'   => array( 1200, 675 ),
+		'tiktok'    => array( 1080, 1920 ),
+		'telegram'  => array( 1280, 720 ),
+		'pinterest' => array( 1000, 1500 ),
 	);
 
 	/**
@@ -139,8 +144,17 @@ class VMSAI_Image_Engine {
 		$stock    = array_values( array_intersect( $chain, self::stock_providers() ) );
 		$generate = array_values( array_diff( $chain, $stock ) );
 
-		// Pollinations needs no key, so it is the guaranteed floor generator.
-		if ( ! in_array( 'pollinations', $generate, true ) ) {
+		// Pollinations needs no key, so it is the guaranteed floor generator —
+		// but only when the operator left it configured. If they removed it
+		// from image_chain on purpose, respect that; if their whole chain
+		// is currently unusable (tripped breakers / missing keys), fall back
+		// to it rather than failing outright.
+		$configured     = array_map( 'strval', (array) VMSAI_Settings::get( 'image_chain', array() ) );
+		$poll_configured = in_array( 'pollinations', $configured, true );
+		$poll_usable     = isset( $this->providers['pollinations'] )
+			&& $this->providers['pollinations']->is_configured()
+			&& VMSAI_Circuit::is_open( 'image:pollinations' );
+		if ( ! in_array( 'pollinations', $generate, true ) && $poll_usable && ( $poll_configured || empty( $generate ) ) ) {
 			$generate[] = 'pollinations';
 		}
 

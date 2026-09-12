@@ -166,7 +166,13 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 	 * @return array|null
 	 */
 	private function poll( $prompt_id ) {
-		$deadline = time() + 180;
+		// A render can legitimately take a while, but this runs inside a cron
+		// tick: if the wait exceeded the PHP max_execution_time the worker
+		// died mid-run instead of timing out gracefully. Cap the deadline to
+		// whatever headroom the process actually has (default 60s builds
+		// never reach the old 180s wall).
+		$budget   = (int) ini_get( 'max_execution_time' );
+		$deadline = time() + ( $budget > 0 ? max( 15, $budget - 10 ) : 60 );
 
 		while ( time() < $deadline ) {
 			sleep( 3 );

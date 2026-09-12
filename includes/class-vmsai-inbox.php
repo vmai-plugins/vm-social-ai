@@ -45,13 +45,25 @@ class VMSAI_Inbox {
 			return 0;
 		}
 
+		// received_at is a MySQL DATETIME column. Sources send wildly
+		// different formats (Facebook: ISO8601 string, Instagram: unix
+		// timestamp) — normalise everything or the insert becomes
+		// 0000-00-00 00:00:00 / fails under strict SQL mode.
+		$received = current_time( 'mysql', true );
+		if ( ! empty( $item['time'] ) ) {
+			$ts = is_numeric( $item['time'] ) ? (int) $item['time'] : strtotime( (string) $item['time'] );
+			if ( $ts ) {
+				$received = gmdate( 'Y-m-d H:i:s', $ts );
+			}
+		}
+
 		$wpdb->insert( $table, array(
 			'channel'         => $item['channel'],
 			'remote_id'       => $item['id'],
 			'author_name'     => $item['author'],
 			'content'         => $item['text'],
 			'status'          => 'pending',
-			'received_at'     => $item['time'] ?: current_time( 'mysql', true ),
+			'received_at'     => $received,
 			'created_at'      => current_time( 'mysql', true ),
 		) );
 

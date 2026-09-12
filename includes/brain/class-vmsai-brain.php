@@ -255,21 +255,28 @@ class VMSAI_Brain {
 		$b     = self::all();
 		$lines = array();
 
-		// VM SEO Brain Integration
-		if ( class_exists( 'VMSB_Brain' ) ) {
-			$seo_brain = new VMSB_Brain();
-			$profile   = $seo_brain->profile();
+		// VM SEO Brain Integration (guarded: either class name may exist,
+		// and profile() may be absent — never fatal the prompt build).
+		if ( class_exists( 'VMSB_Brain' ) || class_exists( 'VMSB_Core' ) ) {
+			$seo_brain = null;
+			if ( class_exists( 'VMSB_Brain' ) && method_exists( 'VMSB_Brain', 'profile' ) ) {
+				$seo_brain = new VMSB_Brain();
+			} elseif ( class_exists( 'VMSB_Core' ) && method_exists( 'VMSB_Core', 'profile' ) ) {
+				$seo_brain = new VMSB_Core();
+			}
+			if ( $seo_brain ) {
+				$profile = (array) $seo_brain->profile();
 
-			// Override with SEO Brain's deeper profile if fields are empty here.
-			if ( empty( $b['business_name'] ) ) $b['business_name'] = $profile['name'];
-			if ( empty( $b['one_liner'] ) )     $b['one_liner']     = $profile['description'];
-			if ( empty( $b['industry'] ) )      $b['industry']      = $profile['type'];
-			if ( empty( $b['audience'] ) )      $b['audience']      = $profile['audience'];
-			if ( empty( $b['tone'] ) )          $b['tone']          = $profile['tone'];
+				// Override with SEO Brain's deeper profile if fields are empty here.
+				if ( empty( $b['business_name'] ) && ! empty( $profile['name'] ) ) $b['business_name'] = $profile['name'];
+				if ( empty( $b['one_liner'] ) && ! empty( $profile['description'] ) )     $b['one_liner']     = $profile['description'];
+				if ( empty( $b['industry'] ) && ! empty( $profile['type'] ) )      $b['industry']      = $profile['type'];
+				if ( empty( $b['audience'] ) && ! empty( $profile['audience'] ) )      $b['audience']      = $profile['audience'];
+				if ( empty( $b['tone'] ) && ! empty( $profile['tone'] ) )          $b['tone']          = $profile['tone'];
+			}
 		}
 
 		$lines[] = 'BUSINESS: ' . ( $b['business_name'] ?? get_bloginfo( 'name' ) );
-
 		$map = array(
 			'one_liner'      => 'WHAT IT DOES',
 			'industry'       => 'INDUSTRY',

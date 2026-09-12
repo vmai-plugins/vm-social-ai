@@ -259,8 +259,9 @@ class VMSAI_Text_Aipuffer implements VMSAI_Text_Provider {
 
 		// LOCAL SYNC: If on same site, try to reach into the backend classes directly.
 		if ( ( ! VMSAI_Settings::credential( 'aipuffer_site' ) || strpos( home_url(), VMSAI_Settings::credential( 'aipuffer_site' ) ) !== false ) ) {
-			// 1. AIPKit (Modern)
-			if ( class_exists( '\WPAICG\AIPKit_Providers' ) ) {
+			// 1. AIPKit (Modern) — method_exists guard: renamed/removed
+			// statics in newer AIPKit builds would fatal this listing.
+			if ( class_exists( '\WPAICG\AIPKit_Providers' ) && method_exists( '\WPAICG\AIPKit_Providers', 'get_model_list' ) ) {
 				$aip_providers = array( 'OpenAI', 'Google', 'Claude', 'OpenRouter', 'DeepSeek', 'xAI' );
 				foreach ( $aip_providers as $p ) {
 					$list = \WPAICG\AIPKit_Providers::get_model_list( $p );

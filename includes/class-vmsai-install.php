@@ -44,7 +44,7 @@ class VMSAI_Install {
 	 * @return void
 	 */
 	public static function deactivate() {
-		foreach ( array( self::CRON_TICK, self::CRON_PLANNER, self::CRON_MODELS, self::CRON_METRICS, self::CRON_NEWS, self::CRON_REFLECT, self::CRON_RECYCLE ) as $hook ) {
+		foreach ( array( self::CRON_TICK, self::CRON_PLANNER, self::CRON_MODELS, self::CRON_METRICS, self::CRON_NEWS, self::CRON_REFLECT, self::CRON_RECYCLE, self::CRON_INBOX, self::CRON_CLEANUP ) as $hook ) {
 			$timestamp = wp_next_scheduled( $hook );
 			while ( $timestamp ) {
 				wp_unschedule_event( $timestamp, $hook );
@@ -128,7 +128,7 @@ class VMSAI_Install {
 			meta_key VARCHAR(120) NOT NULL,
 			meta_value LONGTEXT NULL,
 			weight FLOAT NOT NULL DEFAULT 1,
-			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			UNIQUE KEY bucket_key (bucket, meta_key)
 		) $charset;";
@@ -146,7 +146,7 @@ class VMSAI_Install {
 			channels TEXT NULL,
 			pillars LONGTEXT NULL,
 			starts_on DATE NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			KEY status (status)
 		) $charset;";
@@ -172,7 +172,7 @@ class VMSAI_Install {
 			queue_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			last_error TEXT NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NULL,
 			PRIMARY KEY (id),
 			KEY campaign_status (campaign_id, status),
@@ -192,7 +192,7 @@ class VMSAI_Install {
 			channels TEXT NULL,
 			weight TINYINT UNSIGNED NOT NULL DEFAULT 10,
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			KEY status (status)
 		) $charset;";
@@ -234,7 +234,7 @@ class VMSAI_Install {
 			remote_id VARCHAR(190) NULL,
 			permalink VARCHAR(500) NULL,
 			published_at DATETIME NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NULL,
 			PRIMARY KEY (id),
 			KEY dispatch (status, scheduled_at),
@@ -258,7 +258,7 @@ class VMSAI_Install {
 			status VARCHAR(20) NOT NULL DEFAULT 'pending',
 			received_at DATETIME NULL,
 			replied_at DATETIME NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			UNIQUE KEY remote_msg (channel, remote_id),
 			KEY queue_id (queue_id)
@@ -291,7 +291,7 @@ class VMSAI_Install {
 			context_length INT UNSIGNED NOT NULL DEFAULT 0,
 			is_free TINYINT(1) NOT NULL DEFAULT 0,
 			meta LONGTEXT NULL,
-			synced_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			synced_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			UNIQUE KEY provider_model (provider, model_id),
 			KEY modality (modality)
@@ -304,7 +304,7 @@ class VMSAI_Install {
 			scope VARCHAR(40) NOT NULL DEFAULT 'core',
 			message TEXT NULL,
 			context LONGTEXT NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			KEY level_scope (level, scope),
 			KEY created_at (created_at)
@@ -320,7 +320,7 @@ class VMSAI_Install {
 			tokens_in INT UNSIGNED NOT NULL DEFAULT 0,
 			tokens_out INT UNSIGNED NOT NULL DEFAULT 0,
 			cost DECIMAL(12,6) NOT NULL DEFAULT 0.000000,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			KEY provider_model (provider, model),
 			KEY created_at (created_at)
@@ -396,7 +396,11 @@ class VMSAI_Install {
 	}
 
 	/**
-	 * Custom intervals for background tasks.
+	 * Custom intervals for background tasks. Kept as the single source of
+	 * truth — VMSAI_Scheduler no longer defines its own copy.
+	 *
+	 * @param array $schedules Registered schedules.
+	 * @return array
 	 */
 	public static function add_schedules( $schedules ) {
 		$schedules['vmsai_five_minutes'] = array(
@@ -410,3 +414,4 @@ class VMSAI_Install {
 		return $schedules;
 	}
 }
+

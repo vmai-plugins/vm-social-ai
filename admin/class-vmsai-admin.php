@@ -226,6 +226,12 @@ class VMSAI_Admin {
 
 		$section = isset( $_POST['section'] ) ? sanitize_key( wp_unslash( $_POST['section'] ) ) : '';
 
+		// Credentials, chains and channel wiring are key material — require
+		// the key-management cap, not just the editor cap.
+		if ( in_array( $section, array( 'engines', 'channels', 'updates' ), true ) && ! current_user_can( 'vmsai_manage_keys' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage API keys and channels.', 'vm-social-ai-pro' ) );
+		}
+
 		switch ( $section ) {
 			case 'engines':
 				$this->save_engines();
@@ -303,7 +309,7 @@ class VMSAI_Admin {
 
 		$credentials = array();
 
-		foreach ( array( 'openai_key', 'openai_image_url', 'aipuffer_site', 'aipuffer_key', 'aipuffer_bot_id', 'anthropic_key', 'gemini_key', 'openrouter_key', 'nvidia_key', 'nvidia_url', 'ollama_url', 'ollama_token', 'hf_token', 'cf_token', 'pollinations_token', 'comfyui_url', 'comfyui_token', 'comfyui_workflow', 'pexels_key', 'minimax_key', 'luma_key', 'heygen_key', 'heygen_avatar_id', 'heygen_voice_id', 'svd_url', 'elevenlabs_key', 'tavily_key' ) as $field ) {
+		foreach ( array( 'openai_key', 'openai_image_url', 'omniroute_url', 'omniroute_key', 'aipuffer_site', 'aipuffer_key', 'aipuffer_bot_id', 'anthropic_key', 'gemini_key', 'openrouter_key', 'nvidia_key', 'nvidia_url', 'ollama_url', 'ollama_token', 'hf_token', 'cf_token', 'pollinations_token', 'comfyui_url', 'comfyui_token', 'comfyui_workflow', 'pexels_key', 'minimax_key', 'luma_key', 'heygen_key', 'heygen_avatar_id', 'heygen_voice_id', 'svd_url', 'elevenlabs_key', 'tavily_key' ) as $field ) {
 			if ( isset( $post[ $field ] ) ) {
 				$credentials[ $field ] = 'comfyui_workflow' === $field
 					? trim( (string) $post[ $field ] )
@@ -426,13 +432,20 @@ class VMSAI_Admin {
 			)
 		);
 
-		$credentials = array();
-		foreach ( array( 'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url', 'outbound_proxy', 'github_token' ) as $field ) {
-			if ( isset( $post[ $field ] ) ) {
-				$credentials[ $field ] = trim( (string) $post[ $field ] );
+		// Credentials ride along on the settings form — only users with the
+		// key-management cap may write them. Otherwise section=settings would
+		// re-open the privilege-escalation hole that engines/channels/updates
+		// are already gated against (outbound_proxy alone redirects every
+		// API call, with all bearer tokens, through an attacker's server).
+		if ( current_user_can( 'vmsai_manage_keys' ) ) {
+			$credentials = array();
+			foreach ( array( 'r2_account_id', 'r2_bucket', 'r2_key', 'r2_secret', 'r2_public_url', 'outbound_proxy', 'github_token' ) as $field ) {
+				if ( isset( $post[ $field ] ) ) {
+					$credentials[ $field ] = trim( (string) $post[ $field ] );
+				}
 			}
+			VMSAI_Settings::update_credentials( $credentials );
 		}
-		VMSAI_Settings::update_credentials( $credentials );
 	}
 
 	/**

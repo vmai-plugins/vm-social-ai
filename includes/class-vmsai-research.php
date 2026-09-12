@@ -49,7 +49,8 @@ class VMSAI_Research {
 		}
 
 		// FALLBACK: Use Gemini Grounding (Google Search Retrieval)
-		if ( vmsai()->text_engine()->provider('gemini')->is_configured() ) {
+		$gemini = vmsai()->text_engine()->provider('gemini');
+		if ( $gemini && $gemini->is_configured() ) {
 			$system = "You are a research assistant. Use Google Search to provide a factual, data-driven summary of the query.";
 			$result = vmsai()->text_engine()->generate( $system, $query, array(
 				'prefer' => 'gemini',

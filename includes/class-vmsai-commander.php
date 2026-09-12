@@ -418,6 +418,10 @@ class VMSAI_Commander {
 
 		global $wpdb;
 		$channels = (array) json_decode( (string) $campaign['channels'], true );
+		if ( ! $channels ) {
+			VMSAI_Logger::warn( 'commander', 'Skipped injecting slot: campaign has no channels.' );
+			return;
+		}
 		$channel  = $channels[ array_rand( $channels ) ];
 		$today    = current_time( 'Y-m-d' );
 

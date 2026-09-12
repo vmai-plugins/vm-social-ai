@@ -47,26 +47,71 @@ class VMSAI_Channel_Telegram extends VMSAI_Channel {
 			$payload = array(
 				'chat_id' => $chat_id,
 				'photo'   => $image,
-				'caption' => mb_substr( $caption, 0, 1024 ),
+				'caption' => self::to_telegram_html( $caption, 1024 ),
 				'parse_mode' => 'HTML'
 			);
 		} else {
 			$method = '/sendMessage';
 			$payload = array(
 				'chat_id' => $chat_id,
-				'text'    => mb_substr( $caption, 0, 4096 ),
+				'text'    => self::to_telegram_html( $caption, 4096 ),
 				'parse_mode' => 'HTML'
 			);
 		}
-
-		// Convert basic markdown/unicode bold to simple HTML for Telegram
-		$payload['text'] = !empty($payload['text']) ? str_replace( array('**', '🚀'), array('<b>', ''), $payload['text'] ) : '';
-		if(isset($payload['caption'])) $payload['caption'] = str_replace( array('**', '🚀'), array('<b>', ''), $payload['caption'] );
 
 		$res = VMSAI_Http::post( self::API . $token . $method, array( 'json' => $payload ) );
 
 		if ( ! $res['ok'] ) return $this->fail( $res['error'] );
 
 		return $this->ok( $res['json']['result']['message_id'], 'https://t.me/' . ltrim($chat_id, '@') );
+	}
+
+	/**
+	 * Escape a caption for parse_mode=HTML and convert Markdown bold.
+	 *
+	 * Convert first (pairing **open** **close**), then truncate, so the
+	 * length cap cannot slice a tag in half. Emoji are preserved.
+	 *
+	 * @param string $text  Raw caption.
+	 * @param int    $limit Max characters after conversion.
+	 * @return string
+	 */
+	private static function to_telegram_html( $text, $limit = 4096 ) {
+		$text = (string) $text;
+		if ( '' === trim( $text ) ) {
+			return '';
+		}
+		$escaped = htmlspecialchars( $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+		// Pair **open** **close**; an odd trailing ** is dropped.
+		$parts = explode( '**', $escaped );
+		$out   = array_shift( $parts );
+		foreach ( $parts as $i => $chunk ) {
+			$out .= ( 0 === $i % 2 ) ? '<b>' . $chunk : $chunk . '</b>';
+		}
+		// Remove a dangling opener left by an odd count.
+		$count = substr_count( $out, '<b>' ) - substr_count( $out, '</b>' );
+		if ( $count > 0 ) {
+			$pos = strrpos( $out, '<b>' );
+			if ( false !== $pos ) {
+				$out = substr_replace( $out, '', $pos, 3 );
+			}
+		}
+		if ( $limit > 0 && mb_strlen( $out ) > $limit ) {
+			$out = mb_substr( $out, 0, $limit );
+			// Truncation must not leave a half-written tag.
+			$open  = substr_count( $out, '<b>' );
+			$close = substr_count( $out, '</b>' );
+			if ( $open > $close ) {
+				$out .= str_repeat( '</b>', $open - $close );
+				if ( mb_strlen( $out ) > $limit ) {
+					$out = mb_substr( $out, 0, $limit );
+				}
+			}
+			$lt = strrpos( $out, '<' );
+			if ( false !== $lt && false === strpos( $out, '>', $lt ) ) {
+				$out = substr( $out, 0, $lt );
+			}
+		}
+		return $out;
 	}
 }

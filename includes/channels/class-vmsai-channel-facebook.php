@@ -190,46 +190,68 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 	 * Publish a video (Reel).
 	 */
 	private function publish_video( $post, $file, $page_id, $token ) {
-		$filename = basename( $file );
-		$url      = '';
+		if ( ! file_exists( $file ) || ! is_readable( $file ) ) {
+			return $this->fail( __( 'Reel video file is missing or unreadable.', 'vm-social-ai-pro' ) );
+		}
 
-		// To publish to FB/IG, the video MUST be on a public URL or uploaded as binary.
-		// We use binary upload for reliability on Facebook.
+		// Phase 1: start a Reel upload session.
 		$res = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode( $page_id ) . '/video_reels', array(
 			'json' => array(
 				'upload_phase' => 'start',
-				'access_token' => $token
-			)
+				'access_token' => $token,
+			),
+			'scope' => 'channel.facebook',
 		) );
 
-		if ( ! $res['ok'] || empty($res['json']['video_id']) ) {
+		if ( ! $res['ok'] || empty( $res['json']['video_id'] ) || empty( $res['json']['upload_url'] ) ) {
 			return $this->fail( __( 'Failed to start Reel upload session.', 'vm-social-ai-pro' ) );
 		}
 
-		$video_id = $res['json']['video_id'];
-		$binary = file_get_contents( $file );
+		$video_id   = $res['json']['video_id'];
+		$upload_url = $res['json']['upload_url'];
 
-		// Step 2: Upload Binary
-		// Facebook expects the binary in a very specific way for Reels.
-		// For simplicity in this implementation, we'll try the direct 'videos' endpoint
-		// which works for most business pages and allows specifying 'reel' context.
-
-		$upload = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode( $page_id ) . '/videos', array(
-			'headers' => array( 'Authorization' => 'Bearer ' . $token ),
-			'body' => array(
-				'description' => $this->caption( $post ),
-				'source' => $binary,
-				'reel_content_type' => 'REELS',
+		// Phase 2: stream the binary to the rupload endpoint. Facebook's Reel
+		// protocol is a raw PUT with offset/file_size headers — NOT a form
+		// post (the old code discarded the session and posted the binary as
+		// a multipart field on /videos, which corrupted the upload).
+		$upload = VMSAI_Http::send_file(
+			'PUT',
+			$upload_url,
+			$file,
+			array(
+				'Authorization' => 'OAuth ' . $token,
+				'file_url'      => $upload_url,
+				'offset'        => '0',
+				'file_size'     => (string) filesize( $file ),
 			),
-			'timeout' => 120
+			'channel.facebook',
+			600
+		);
+
+		if ( ! $upload['ok'] ) {
+			return $this->fail( $upload['error'] ?: __( 'Reel binary upload failed.', 'vm-social-ai-pro' ) );
+		}
+
+		// The binary is delivered; the local file is no longer needed even if
+		// the finish call below fails (the session can be finished by hand).
+		@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+
+		// Phase 3: finish the session with the description.
+		$finish = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode( $page_id ) . '/video_reels', array(
+			'json' => array(
+				'upload_phase' => 'finish',
+				'video_id'     => $video_id,
+				'description'  => $this->caption( $post ),
+				'access_token' => $token,
+			),
+			'scope' => 'channel.facebook',
 		) );
 
-		@unlink( $file );
+		if ( ! $finish['ok'] ) {
+			return $this->fail( $finish['error'] ?: __( 'Failed to finish Reel upload.', 'vm-social-ai-pro' ) );
+		}
 
-		if ( ! $upload['ok'] ) return $this->fail( $upload['error'] );
-
-		$id = $upload['json']['id'];
-		return $this->ok( $id, 'https://www.facebook.com/' . $id );
+		return $this->ok( $video_id, 'https://www.facebook.com/' . $video_id );
 	}
 
 	/**
