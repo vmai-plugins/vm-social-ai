@@ -87,7 +87,7 @@ class VMSAI_Text_Gemini implements VMSAI_Text_Provider {
 
 		// GROUNDING: Enable Google Search Retrieval if requested or if trending context is needed.
 		if ( ! empty( $args['grounding'] ) || ! empty( $args['search'] ) ) {
-			$payload['tools'] = array( array( 'google_search_retrieval' => array() ) );
+			$payload['tools'] = array( array( 'google_search' => new \stdClass() ) );
 		}
 
 		$url = self::BASE . '/models/' . rawurlencode( $model ) . ':generateContent';

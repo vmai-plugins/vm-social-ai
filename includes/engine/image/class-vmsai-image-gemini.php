@@ -52,6 +52,7 @@ class VMSAI_Image_Gemini implements VMSAI_Image_Provider {
 		// 'imagen-3' (generic) was retired by Google in August 2024.
 		$models_to_try = array_unique( array_filter( array(
 			$model,
+			'imagen-3.0-generate-002',
 			'imagen-3.0-generate-001',
 			'imagen-3.0-fast-generate-001',
 			'imagen-3.0-capability-001',
