@@ -316,7 +316,7 @@ class VMSAI_Video_Engine {
 			elseif ( 'cogvideox' === $source ) $res = $this->from_cogvideox( $prompt );
 			elseif ( 'svd' === $source )      $res = $this->from_svd( $prompt );
 
-			if ( $res['ok'] && ! empty($res['binary']) ) {
+			if ( $res['ok'] && ( ! empty($res['binary']) || ! empty($res['url']) ) ) {
 				VMSAI_Circuit::success( 'video:' . $source );
 				VMSAI_Usage::record(
 					array(
@@ -966,7 +966,7 @@ class VMSAI_Video_Engine {
 		$direct_url = $res['json']['data'][0]['url'] ?? $res['json']['url'] ?? $res['json']['video_url'] ?? $res['json']['output_url'] ?? '';
 		if ( ! empty( $direct_url ) ) {
 			$download = VMSAI_Http::get( $direct_url, array( 'timeout' => 120 ) );
-			return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+			return array( 'ok' => true, 'binary' => $download['body'] ?? '', 'url' => $direct_url, 'error' => '' );
 		}
 
 		$task_id = $res['json']['id'] ?? $res['json']['task_id'] ?? '';
@@ -990,7 +990,7 @@ class VMSAI_Video_Engine {
 			$poll_url = $status['json']['url'] ?? $status['json']['video_url'] ?? $status['json']['data'][0]['url'] ?? '';
 			if ( in_array( $state, array( 'completed', 'Success', 'succeeded' ) ) && ! empty( $poll_url ) ) {
 				$download = VMSAI_Http::get( $poll_url, array( 'timeout' => 120 ) );
-				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+				return array( 'ok' => true, 'binary' => $download['body'] ?? '', 'url' => $poll_url, 'error' => '' );
 			}
 
 			if ( in_array( $state, array( 'failed', 'Fail', 'error' ) ) ) {

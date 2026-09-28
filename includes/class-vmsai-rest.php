@@ -1087,12 +1087,15 @@ class VMSAI_Rest {
 				$slug
 			);
 
-			if ( $result['ok'] && ! empty( $result['binary'] ) ) {
-				$uploads  = wp_upload_dir();
-				$filename = 'vmsai-test-video-' . $slug . '-' . wp_generate_password( 8, false, false ) . '.mp4';
-				$path     = trailingslashit( $uploads['basedir'] ) . $filename;
-				file_put_contents( $path, $result['binary'] );
-				$url = trailingslashit( $uploads['baseurl'] ) . $filename;
+			if ( $result['ok'] && ( ! empty( $result['binary'] ) || ! empty( $result['url'] ) ) ) {
+				$url = $result['url'] ?? '';
+				if ( ! empty( $result['binary'] ) ) {
+					$uploads  = wp_upload_dir();
+					$filename = 'vmsai-test-video-' . $slug . '-' . wp_generate_password( 8, false, false ) . '.mp4';
+					$path     = trailingslashit( $uploads['basedir'] ) . $filename;
+					file_put_contents( $path, $result['binary'] );
+					$url      = trailingslashit( $uploads['baseurl'] ) . $filename;
+				}
 
 				$this->restore_credentials( $saved, true );
 
@@ -1163,14 +1166,15 @@ class VMSAI_Rest {
 
 		$result = vmsai()->video_engine()->create( $prompt, $template, $provider );
 
-		if ( $result['ok'] && ! empty( $result['binary'] ) ) {
-			$uploads  = wp_upload_dir();
-			// Random suffix: predictable names in the public uploads root are
-			// enumerable. The vmsai-test-video-* glob is swept by cleanup_assets().
-			$filename = 'vmsai-test-video-chain-' . wp_generate_password( 8, false, false ) . '.mp4';
-			$path     = trailingslashit( $uploads['basedir'] ) . $filename;
-			file_put_contents( $path, $result['binary'] );
-			$url = trailingslashit( $uploads['baseurl'] ) . $filename;
+		if ( $result['ok'] && ( ! empty( $result['binary'] ) || ! empty( $result['url'] ) ) ) {
+			$url = $result['url'] ?? '';
+			if ( ! empty( $result['binary'] ) ) {
+				$uploads  = wp_upload_dir();
+				$filename = 'vmsai-test-video-chain-' . wp_generate_password( 8, false, false ) . '.mp4';
+				$path     = trailingslashit( $uploads['basedir'] ) . $filename;
+				file_put_contents( $path, $result['binary'] );
+				$url      = trailingslashit( $uploads['baseurl'] ) . $filename;
+			}
 
 			$this->restore_credentials( $saved, true );
 

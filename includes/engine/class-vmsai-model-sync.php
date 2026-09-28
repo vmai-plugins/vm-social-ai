@@ -150,15 +150,16 @@ class VMSAI_Model_Sync {
 	 * @param string $modality text|image.
 	 * @return array
 	 */
-	public static function models( $provider, $modality = 'text' ) {
+	public static function models( $provider, $modality = 'text', $limit = 80 ) {
 		global $wpdb;
 		$table = VMSAI_Install::table( 'models' );
 
 		return (array) $wpdb->get_results( // phpcs:ignore
 			$wpdb->prepare(
-				"SELECT model_id, label, context_length, is_free FROM `$table` WHERE provider = %s AND modality = %s ORDER BY is_free DESC, label ASC", // phpcs:ignore
+				"SELECT model_id, label, context_length, is_free FROM `$table` WHERE provider = %s AND modality = %s ORDER BY is_free DESC, label ASC LIMIT %d", // phpcs:ignore
 				$provider,
-				$modality
+				$modality,
+				(int) $limit
 			),
 			ARRAY_A
 		);
@@ -169,6 +170,12 @@ class VMSAI_Model_Sync {
 	 *
 	 * @return array
 	 */
+	
+	public static function all() {
+		global $wpdb;
+		$table = VMSAI_Install::table( 'models' );
+		return (array) $wpdb->get_results( "SELECT model_id, label, provider, modality, is_free FROM `$table` ORDER BY provider ASC, label ASC", ARRAY_A );
+	}
 	public static function state() {
 		$state = get_option( 'vmsai_model_sync_state', array() );
 		return is_array( $state ) ? $state : array();

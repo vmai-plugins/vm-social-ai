@@ -292,8 +292,17 @@ class VMSAI_Admin {
 		$image_chain = array_values( array_filter( array_map( 'sanitize_key', (array) ( $post['image_chain'] ?? array() ) ) ) );
 		$video_chain = array_values( array_filter( array_map( 'sanitize_key', (array) ( $post['video_chain'] ?? array() ) ) ) );
 
+		$engine_preset = sanitize_key( $post['engine_preset'] ?? 'omniroute' );
+		if ( 'omniroute' === $engine_preset ) {
+			if ( ! in_array( 'omniroute', $text_chain, true ) ) array_unshift( $text_chain, 'omniroute' );
+			if ( ! in_array( 'omniroute', $image_chain, true ) ) array_unshift( $image_chain, 'omniroute' );
+			if ( ! in_array( 'pollinations', $image_chain, true ) ) $image_chain[] = 'pollinations';
+			if ( ! in_array( 'omniroute', $video_chain, true ) ) array_unshift( $video_chain, 'omniroute' );
+			VMSAI_Settings::set( 'video_source', 'omniroute' );
+		}
 		VMSAI_Settings::update(
 			array(
+				'engine_preset'   => $engine_preset,
 				'text_chain'      => $text_chain,
 				'image_chain'     => $image_chain,
 				'video_chain'     => $video_chain,
@@ -426,7 +435,7 @@ class VMSAI_Admin {
 				'log_level'         => in_array( $post['log_level'] ?? '', array( 'debug', 'info', 'warn', 'error' ), true ) ? $post['log_level'] : 'info',
 				'admin_theme'       => in_array( $post['admin_theme'] ?? '', array( 'dark', 'light' ), true ) ? $post['admin_theme'] : 'dark',
 				'remote_storage'    => in_array( $post['remote_storage'] ?? '', array( 'off', 'r2' ), true ) ? $post['remote_storage'] : 'off',
-				'video_source'      => in_array( $post['video_source'] ?? '', array( 'off', 'aipuffer', 'pexels', 'pollinations', 'minimax', 'luma', 'heygen', 'cogvideox', 'svd' ), true ) ? $post['video_source'] : 'off',
+				'video_source'      => in_array( $post['video_source'] ?? '', array( 'off', 'omniroute', 'aipuffer', 'pexels', 'pollinations', 'minimax', 'luma', 'heygen', 'cogvideox', 'svd' ), true ) ? $post['video_source'] : 'off',
 				'alert_on_failure'  => ! empty( $post['alert_on_failure'] ) ? 1 : 0,
 				'alert_email'       => sanitize_email( (string) ( $post['alert_email'] ?? '' ) ),
 			)

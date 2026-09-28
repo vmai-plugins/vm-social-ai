@@ -95,6 +95,7 @@ endif;
 			<div id="vmsai-video-providers">
 				<?php
 				$providers = array(
+					'omniroute'    => array( 'label' => 'OmniRoute AI (Veo/Seedance)', 'type' => 'Free OmniRoute Hub', 'free' => true ),
 					'aipuffer'     => array( 'label' => 'AI Puffer (Veo)', 'type' => 'AIPKit / multi-model', 'free' => true ),
 					'pollinations' => array( 'label' => 'Pollinations AI', 'type' => 'Free / Keyless', 'free' => true ),
 					'cogvideox'    => array( 'label' => 'CogVideoX', 'type' => 'Hugging Face API', 'free' => true ),
@@ -103,7 +104,7 @@ endif;
 					'luma'         => array( 'label' => 'Luma Dream Machine', 'type' => 'Elite / Paid', 'free' => false ),
 					'svd'          => array( 'label' => 'Stable Video Diffusion', 'type' => 'Local GPU', 'free' => true ),
 				);
-				$current_provider = VMSAI_Settings::get( 'video_source', 'pollinations' );
+				$current_provider = VMSAI_Settings::get( 'video_source', 'omniroute' );
 				foreach ( $providers as $slug => $p ) :
 				?>
 					<div class="vmsai-provider-card <?php echo $slug === $current_provider ? 'is-active' : ''; ?>" data-provider="<?php echo esc_attr($slug); ?>">
@@ -151,7 +152,7 @@ endif;
 <script>
 (function($) {
 	var activeTemplate = 'cinematic_product';
-	var activeProvider = $('.vmsai-provider-card.is-active').data('provider') || 'pollinations';
+	var activeProvider = $('.vmsai-provider-card.is-active').data('provider') || 'omniroute';
 
 	$(document).on('click', '.vmsai-template-card', function() {
 		$('.vmsai-template-card').removeClass('is-active');

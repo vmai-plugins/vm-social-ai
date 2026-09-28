@@ -76,6 +76,9 @@ class VMSAI_Text_Engine {
 	 */
 	public function chain( $respect_breaker = true ) {
 		$chain = (array) VMSAI_Settings::get( 'text_chain', array() );
+		if ( empty( $chain ) ) {
+			$chain = array( 'omniroute', 'aipuffer', 'gemini' );
+		}
 		$out   = array();
 
 		foreach ( $chain as $slug ) {

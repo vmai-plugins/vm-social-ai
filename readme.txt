@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.17.2
+Stable tag: 1.17.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,12 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.17.3 =
+* AI Engine Redesign: Introduced dedicated OmniRoute All-In-One Powerhouse Hub with unified credentials and 3-in-1 modality selectors (Text, Image, Video).
+* Video Engine Bugfix: Added OmniRoute to settings and Video Lab provider whitelists; resolved empty binary drops when upstream returns direct video URLs.
+* Model Synchronization: Optimized catalogue queries with limit pagination to prevent DOM bloating and improve admin load times.
+* UI Enhancements: Added tabbed interface separating OmniRoute Hub, Advanced Multi-Provider Chains, and Live Searchable Model Catalogue.
 
 = 1.17.2 =
 * OmniRoute Text Engine: Enforced non-streaming payload ('stream' => false) to prevent cURL 28 timeouts, set default model to auto/best-coding.

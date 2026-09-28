@@ -109,6 +109,9 @@ class VMSAI_Image_Engine {
 	 */
 	public function chain() {
 		$chain = (array) VMSAI_Settings::get( 'image_chain', array() );
+		if ( empty( $chain ) ) {
+			$chain = array( 'omniroute', 'pollinations', 'gemini' );
+		}
 		$out   = array();
 
 		foreach ( $chain as $slug ) {

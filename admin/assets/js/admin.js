@@ -660,7 +660,7 @@ jQuery( function ( $ ) {
 	actions[ 'sync-models' ] = function ( button ) {
 		busy( button, true );
 		var creds = {};
-		$( '.vmsai-chain__body input, .vmsai-chain__body textarea' ).each( function () {
+		$( '.vmsai-chain__body input, .vmsai-chain__body textarea, [data-vmsai-cred]' ).each( function () {
 			var val = $( this ).val();
 			if ( this.name && val && ! val.match( /^•+$/ ) ) creds[ this.name ] = val;
 		} );

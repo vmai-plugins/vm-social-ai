@@ -221,6 +221,7 @@ $vmsai_level = VMSAI_Settings::get( 'log_level', 'info' );
 					<label for="vmsai-video-source"><?php esc_html_e( 'Default Video Engine', 'vm-social-ai-pro' ); ?></label>
 					<select id="vmsai-video-source" name="video_source">
 						<option value="off" <?php selected( VMSAI_Settings::get( 'video_source' ), 'off' ); ?>><?php esc_html_e( 'Disabled (Ken Burns Still Image)', 'vm-social-ai-pro' ); ?></option>
+						<option value="omniroute" <?php selected( VMSAI_Settings::get( 'video_source' ), 'omniroute' ); ?>><?php esc_html_e( 'OmniRoute AI (Free Veo / Seedance - Recommended)', 'vm-social-ai-pro' ); ?></option>
 						<option value="aipuffer" <?php selected( VMSAI_Settings::get( 'video_source' ), 'aipuffer' ); ?>><?php esc_html_e( 'AI Puffer (Google Veo)', 'vm-social-ai-pro' ); ?></option>
 						<option value="pexels" <?php selected( VMSAI_Settings::get( 'video_source' ), 'pexels' ); ?>><?php esc_html_e( 'Pexels Stock Video (Recommended)', 'vm-social-ai-pro' ); ?></option>
 					<option value="pollinations" <?php selected( VMSAI_Settings::get( 'video_source' ), 'pollinations' ); ?>><?php esc_html_e( 'Pollinations AI (Free / Keyless)', 'vm-social-ai-pro' ); ?></option>
