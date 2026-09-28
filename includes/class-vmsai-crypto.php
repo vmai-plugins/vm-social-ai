@@ -77,7 +77,12 @@ class VMSAI_Crypto {
 	 * @return string Portable ciphertext, or the plaintext if OpenSSL is missing.
 	 */
 	public static function encrypt( $plain ) {
-		if ( '' === $plain || ! function_exists( 'openssl_encrypt' ) ) {
+		if ( '' === $plain ) {
+			return $plain;
+		}
+
+		if ( ! function_exists( 'openssl_encrypt' ) ) {
+			self::warn_plaintext_fallback( 'The openssl PHP extension is unavailable' );
 			return $plain;
 		}
 
@@ -86,10 +91,29 @@ class VMSAI_Crypto {
 		$out = openssl_encrypt( $plain, self::CIPHER, self::key(), OPENSSL_RAW_DATA, $iv, $tag );
 
 		if ( false === $out ) {
+			self::warn_plaintext_fallback( 'openssl_encrypt() failed' );
 			return $plain;
 		}
 
 		return self::PREFIX . base64_encode( $iv . $tag . $out ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+	}
+
+	/**
+	 * Encryption falling back to plaintext used to be silent, so a host
+	 * missing the openssl extension would store every API key/token in the
+	 * clear with nothing in the logs to say so. Surface it loudly instead —
+	 * once per request is enough to avoid spamming a bulk settings save.
+	 *
+	 * @param string $reason Why the fallback happened.
+	 * @return void
+	 */
+	private static function warn_plaintext_fallback( $reason ) {
+		static $logged = false;
+		if ( $logged ) {
+			return;
+		}
+		$logged = true;
+		VMSAI_Logger::error( 'security.crypto', $reason . ' — credentials are being saved as PLAINTEXT, not encrypted.' );
 	}
 
 	/**

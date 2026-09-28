@@ -101,6 +101,8 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 						<div style="margin-top: 15px; font-size: 10px; color: var(--muted);">
 							<strong>Webhook URL:</strong> <code><?php echo esc_url($vmsai_tg_webhook); ?></code>
 							<p>Use this URL in your bot settings if manual webhook registration is required.</p>
+							<strong>Secret token:</strong> <code><?php echo esc_html( VMSAI_Telegram_Bot::webhook_secret() ); ?></code>
+							<p>Pass this as the <code>secret_token</code> parameter on Telegram's <code>setWebhook</code> call (e.g. <code>https://api.telegram.org/bot&lt;TOKEN&gt;/setWebhook?url=&lt;WEBHOOK URL&gt;&amp;secret_token=&lt;SECRET&gt;</code>). Without it, this endpoint accepts any request that reaches it, not only ones from Telegram.</p>
 						</div>
 					</div>
 				<?php endif; ?>

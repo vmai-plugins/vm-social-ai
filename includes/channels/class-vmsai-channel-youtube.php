@@ -101,8 +101,13 @@ class VMSAI_Channel_Youtube extends VMSAI_Channel {
 
 		$title = mb_substr( wp_strip_all_tags( (string) $post['title'] ), 0, 95 );
 
-		// The #Shorts tag in the description is what classifies the upload.
-		$description = trim( $this->caption( $post, true, true ) . "\n\n#Shorts" );
+		// The #Shorts tag in the description is what classifies the upload,
+		// so it must survive truncation — reserve its room first instead of
+		// appending it and then capping the whole string, which could slice
+		// the tag off a caption that's already close to the 4900 limit.
+		$shorts_tag  = "\n\n#Shorts";
+		$body_limit  = 4900 - mb_strlen( $shorts_tag );
+		$description = trim( mb_substr( $this->caption( $post, true, true ), 0, $body_limit ) . $shorts_tag );
 
 		$metadata = array(
 			'snippet' => array(

@@ -63,6 +63,8 @@ defined( 'ABSPATH' ) || exit;
 
 <script>
 (function($) {
+	var esc = VMSAI.esc;
+
 	function generateReport(button) {
 		var $btn = $(button);
 		var label = $btn.text();
@@ -85,8 +87,11 @@ defined( 'ABSPATH' ) || exit;
 			$('#vmsai-rep-clicks').text(new Intl.NumberFormat().format(res.stats.clicks));
 			$('#vmsai-rep-pace').text(res.stats.progress + '%');
 
-			// Format paragraphs
-			var paras = res.report.split("\n\n").map( function(p) { return '<p>' + p + '</p>'; } ).join("");
+			// Format paragraphs. The report embeds free-text campaign
+			// names/titles into its own generation prompt, so escape the
+			// completion before rendering rather than trusting the model
+			// not to echo injected markup back.
+			var paras = res.report.split("\n\n").map( function(p) { return '<p>' + esc(p) + '</p>'; } ).join("");
 			$('#vmsai-rep-text').html(paras);
 
 			$('#vmsai-reporting-content').fadeIn();

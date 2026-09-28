@@ -467,10 +467,14 @@ class VMSAI_Image_Engine {
 			imagesy( $logo )
 		);
 
+		// WP_Image_Editor::get_size() only ever returns width/height, never
+		// a 'mime' key — the extension check below is the only signal that
+		// actually works; the dead $size['mime'] check just emitted an
+		// undefined-array-key warning on every call.
 		$ext = strtolower( (string) pathinfo( $path, PATHINFO_EXTENSION ) );
 		if ( 'png' === $ext ) {
 			imagepng( $base, $path, 8 );
-		} elseif ( ( 'webp' === $ext || 'image/webp' === $size['mime'] ) && function_exists( 'imagewebp' ) ) {
+		} elseif ( 'webp' === $ext && function_exists( 'imagewebp' ) ) {
 			imagewebp( $base, $path, 85 );
 		} else {
 			imagejpeg( $base, $path, 88 );

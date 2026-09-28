@@ -29,7 +29,7 @@ class VMSAI_Http {
 		$is_large = ( ! empty( $args['json'] ) && ( ! empty( $args['json']['model'] ) || ! empty( $args['json']['model_id'] ) || ! empty( $args['json']['images'] ) || ! empty( $args['json']['video_url'] ) ) )
 			|| ( isset( $args['stream'] ) && true === $args['stream'] )
 			|| ( false !== stripos( rawurldecode( $url ), '/upload/' ) )
-			|| ( false !== stripos( rawurldecode( $url ), '/video/' ) )
+			|| ( false !== stripos( rawurldecode( $url ), '/video' ) ) || ( false !== stripos( rawurldecode( $url ), '/image' ) )
 			|| ( false !== stripos( rawurldecode( $url ), '/generate' ) )
 			|| ( false !== stripos( rawurldecode( $url ), '/create' ) );
 		if ( $is_large ) {
@@ -331,6 +331,21 @@ class VMSAI_Http {
 						$candidate = $candidate['message'] ?? wp_json_encode( $candidate );
 					}
 					return substr( (string) $candidate, 0, 300 );
+				}
+			}
+
+			// Some APIs (e.g. X/Twitter's media upload endpoint) use a
+			// plural {"errors":[{"message":...}]} shape instead of a
+			// single error/message key — without this, the real message
+			// was missed entirely and callers fell back to a raw body
+			// substring that's often truncated before the useful part.
+			if ( ! empty( $decoded['errors'] ) && is_array( $decoded['errors'] ) ) {
+				$first = reset( $decoded['errors'] );
+				if ( is_array( $first ) && isset( $first['message'] ) ) {
+					return substr( (string) $first['message'], 0, 300 );
+				}
+				if ( is_string( $first ) ) {
+					return substr( $first, 0, 300 );
 				}
 			}
 		}

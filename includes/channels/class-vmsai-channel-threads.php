@@ -78,6 +78,14 @@ class VMSAI_Channel_Threads extends VMSAI_Channel {
 			if ( 'ERROR' === $state ) {
 				return $this->fail( __( 'Threads failed to process the media container.', 'vm-social-ai-pro' ) );
 			}
+
+			// The loop can also exit by hitting $deadline while $state is
+			// still e.g. 'IN_PROGRESS' — that must not be treated as
+			// "not an error, so go ahead and publish". Threads_publish on
+			// an unconfirmed container risks a broken/rejected post.
+			if ( 'FINISHED' !== $state ) {
+				return $this->fail( __( 'Threads media container did not finish processing in time.', 'vm-social-ai-pro' ) );
+			}
 		}
 
 		// Step 2: Publish

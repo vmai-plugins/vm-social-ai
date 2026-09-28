@@ -79,6 +79,18 @@ class VMSAI_Rest {
 		if ( strpos($route, '/system/check-update') !== false ) return current_user_can( 'vmsai_read' );
 		if ( strpos($route, '/system/github-update') !== false ) return current_user_can( 'update_plugins' ) || current_user_can( 'manage_options' );
 
+		// These previously fell through to the manage_options default,
+		// which the vmsai_manager role (documented above as "Full
+		// access") is never granted — locking that role out of
+		// campaigns, manual ticks and research even though it holds
+		// every plugin-specific capability that would normally cover
+		// them. Route them to the same capability their nearest sibling
+		// route already uses.
+		if ( strpos($route, '/strategy/audit') !== false ) return current_user_can( 'vmsai_read' );
+		if ( strpos($route, '/research/inject') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/campaign/') !== false ) return current_user_can( 'vmsai_plan' );
+		if ( strpos($route, '/tick') !== false ) return current_user_can( 'vmsai_publish' );
+
 		return current_user_can( 'manage_options' );
 	}
 
@@ -490,11 +502,19 @@ class VMSAI_Rest {
 			$slot['angle'] = trim( (string) $slot['angle'] ) . "\n\nREVIEWER FEEDBACK ON THE PREVIOUS DRAFT — fix this specifically: " . $row['reviewer_notes'];
 		}
 
-		$wpdb->delete( VMSAI_Install::table( 'queue' ), array( 'id' => $id ), array( '%d' ) ); // phpcs:ignore
-		$wpdb->update( VMSAI_Install::table( 'plan' ), array( 'status' => 'planned', 'queue_id' => 0 ), array( 'id' => (int) $slot['id'] ), array( '%s', '%d' ), array( '%d' ) ); // phpcs:ignore
-
-		$result = VMSAI_Composer::compose( $slot );
+		// Compose the replacement BEFORE touching the existing post: the old
+		// row used to be deleted (and the plan slot reset) up front, so a
+		// composition failure (timeout, provider error) left neither the
+		// old post nor a new one. VMSAI_Composer::compose() already creates
+		// its own queue row and repoints plan.queue_id/status at it on
+		// success, so the original row only needs to be removed once that
+		// has actually happened.
+		$result   = VMSAI_Composer::compose( $slot );
 		$res_data = is_array( $result ) ? $result : array();
+
+		if ( ! empty( $res_data['ok'] ) ) {
+			$wpdb->delete( VMSAI_Install::table( 'queue' ), array( 'id' => $id ), array( '%d' ) ); // phpcs:ignore
+		}
 
 		return new WP_REST_Response(
 			array(
@@ -1042,10 +1062,17 @@ class VMSAI_Rest {
 			);
 
 			$res_data = is_array( $result ) ? $result : array();
+			$ok       = ! empty( $res_data['ok'] );
+
+			// Stage-then-roll-back, matching the video branch below and
+			// test_engine()/test_channel(): without this, a failed image
+			// provider test (bad/typo'd key) permanently overwrote the
+			// previously-working credential instead of restoring it.
+			$this->restore_credentials( $saved, $ok );
 
 			return new WP_REST_Response(
 				array(
-					'ok'      => ! empty( $res_data['ok'] ),
+					'ok'      => $ok,
 					'url'     => (string) ( $res_data['url'] ?? '' ),
 					'message' => (string) ( $res_data['error'] ?? '' ),
 				),
@@ -1080,10 +1107,12 @@ class VMSAI_Rest {
 		$provider = vmsai()->text_engine()->provider( $slug );
 
 		if ( ! $provider ) {
+			$this->restore_credentials( $saved, false );
 			return new WP_REST_Response( array( 'ok' => false, 'message' => __( 'Unknown text provider.', 'vm-social-ai-pro' ) ), 200 );
 		}
 
 		if ( ! $provider->is_configured() ) {
+			$this->restore_credentials( $saved, false );
 			return new WP_REST_Response( array( 'ok' => false, 'message' => __( 'Not configured — add a key first.', 'vm-social-ai-pro' ) ), 200 );
 		}
 
@@ -1094,10 +1123,16 @@ class VMSAI_Rest {
 		);
 
 		$res_data = is_array( $result ) ? $result : array();
+		$ok       = ! empty( $res_data['ok'] );
+
+		// Same stage-then-roll-back contract as the image/video branches —
+		// a failed text provider test must not permanently overwrite the
+		// previously-working credential.
+		$this->restore_credentials( $saved, $ok );
 
 		return new WP_REST_Response(
 			array(
-				'ok'      => ! empty( $res_data['ok'] ),
+				'ok'      => $ok,
 				'model'   => (string) ( $res_data['model'] ?? '' ),
 				'text'    => (string) ( $res_data['text'] ?? '' ),
 				'message' => (string) ( $res_data['error'] ?? '' ),
@@ -1112,13 +1147,21 @@ class VMSAI_Rest {
 	public function test_video( WP_REST_Request $request ) {
 		$creds = (array) $request->get_param( 'credentials' );
 
+		// The Engines tab's "Test Video Chain" button sends only
+		// `credentials` and expects this fixed demo clip. The Video Lab
+		// (admin/views/video-lab.php) posts to this same route with the
+		// user's own prompt/template/provider — those were previously
+		// ignored outright, so every "Produce Elite Asset" click silently
+		// rendered this same beach clip regardless of what was typed or
+		// picked.
+		$prompt   = sanitize_textarea_field( (string) $request->get_param( 'prompt' ) ) ?: 'A cinematic drone shot of a beautiful tropical beach at sunset';
+		$template = sanitize_key( (string) $request->get_param( 'template' ) ) ?: 'travel_adventure';
+		$provider = sanitize_key( (string) $request->get_param( 'provider' ) ) ?: null;
+
 		// Staged: a failed test rolls back to the previous keys.
 		$saved = $this->stage_credentials( $creds );
 
-		$result = vmsai()->video_engine()->create(
-			'A cinematic drone shot of a beautiful tropical beach at sunset',
-			'travel_adventure'
-		);
+		$result = vmsai()->video_engine()->create( $prompt, $template, $provider );
 
 		if ( $result['ok'] && ! empty( $result['binary'] ) ) {
 			$uploads  = wp_upload_dir();
@@ -1493,8 +1536,34 @@ class VMSAI_Rest {
 			return new WP_Error( 'unauthorized', 'Invalid portal token.', array( 'status' => 403 ) );
 		}
 
+		// This token only ever authorizes the two actions the portal UI
+		// offers a client (class-vmsai-portal.php: "Approve" / "Request
+		// changes") — never an arbitrary status string. Without this
+		// whitelist a valid single-post token could set status to
+		// 'published' directly in the DB with no remote_id ever set,
+		// showing as live everywhere while nothing was actually posted.
+		if ( ! in_array( $status, array( 'approved', 'draft' ), true ) ) {
+			return new WP_Error( 'invalid_status', 'Invalid status.', array( 'status' => 400 ) );
+		}
+
 		global $wpdb;
 		$table = VMSAI_Install::table( 'queue' );
+
+		// The portal is for pre-publish review only, and its token stays
+		// valid for 2 weeks (see admin/views/queue.php) — long after most
+		// posts have already been dispatched. Without checking the row's
+		// *current* status, a still-valid token could flip an
+		// already-published/processing/failed post back to 'approved',
+		// which the scheduler (status='approved' AND scheduled_at <= now)
+		// would then pick up and republish live a second time. This is the
+		// same gate class-vmsai-portal.php's $actionable already uses to
+		// decide whether to even show the Approve/Reject buttons — enforce
+		// it here too, not just in the page's own rendering.
+		$current_status = $wpdb->get_var( $wpdb->prepare( "SELECT status FROM `$table` WHERE id = %d", $id ) ); // phpcs:ignore
+
+		if ( ! in_array( $current_status, array( 'draft', 'approved' ), true ) ) {
+			return new WP_Error( 'not_reviewable', 'This post is no longer awaiting review.', array( 'status' => 409 ) );
+		}
 
 		$wpdb->update( $table, array(
 			'status' => $status,

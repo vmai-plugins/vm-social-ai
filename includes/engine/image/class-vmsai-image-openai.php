@@ -46,7 +46,7 @@ class VMSAI_Image_OpenAI implements VMSAI_Image_Provider {
 			'model'           => $model,
 			'prompt'          => $prompt,
 			'n'               => 1,
-			'size'            => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
+			'size'            => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024, $model ),
 			'response_format' => 'b64_json',
 		);
 
@@ -86,7 +86,16 @@ class VMSAI_Image_OpenAI implements VMSAI_Image_Provider {
 		return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => $error );
 	}
 
-	private function nearest_size( $w, $h ) {
+	private function nearest_size( $w, $h, $model ) {
+		// DALL-E 2 only supports square sizes (256/512/1024) — the wide and
+		// tall options below are DALL-E-3-only and OpenAI's API rejects
+		// them outright with a 400 for dall-e-2, failing every non-square
+		// canvas (YouTube/TikTok, Facebook/LinkedIn, etc.) even with a
+		// valid key.
+		if ( 'dall-e-2' === $model ) {
+			return '1024x1024';
+		}
+
 		$ratio = $w / max( 1, $h );
 		if ( $ratio > 1.5 ) return '1792x1024';
 		if ( $ratio < 0.6 ) return '1024x1792';

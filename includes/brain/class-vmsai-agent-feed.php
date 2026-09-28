@@ -126,7 +126,13 @@ class VMSAI_Agent_Feed {
 
 			$channel   = $candidates[ array_rand( $candidates ) ];
 			$date      = gmdate( 'Y-m-d', strtotime( $start . ' +' . $day_offset . ' day' ) );
-			$best_hour = (int) VMSAI_Analytics::get_optimal_hour( $channel );
+			// get_optimal_local_hour(), not get_optimal_hour(): slot_time
+			// below is interpreted as local wall-clock time by
+			// VMSAI_Composer::slot_timestamp(), which would otherwise
+			// convert the already-UTC hour a second time — the same
+			// timezone-drift bug already fixed in class-vmsai-planner.php
+			// and class-vmsai-campaign-gen.php, reintroduced here.
+			$best_hour = VMSAI_Analytics::get_optimal_local_hour( $channel );
 			$jitter    = wp_rand( -10, 10 );
 			$seconds   = strtotime( '2000-01-01 ' . sprintf( '%02d:00', $best_hour ) . ':00' ) + ( $jitter * 60 );
 			$time      = gmdate( 'H:i:s', $seconds );

@@ -229,13 +229,24 @@ class VMSAI_Scheduler {
 			// ticks. updated_at is what the stuck-slot recovery measures from, so
 			// it has to be stamped here or an overlapping tick will reclaim this
 			// row while it is still being composed.
-			$wpdb->update( // phpcs:ignore
+			//
+			// The WHERE clause re-checks status = 'planned' so this UPDATE is
+			// the actual claim: if two overlapping ticks both SELECTed this
+			// row via pending_slots() before either got here, only the first
+			// UPDATE affects a row (MySQL serializes the two writes) — the
+			// second affects 0 rows and must back off instead of composing
+			// (and later publishing) the same slot twice.
+			$claimed = $wpdb->update( // phpcs:ignore
 				$plan_table,
 				array( 'status' => 'processing', 'updated_at' => current_time( 'mysql', true ) ),
-				array( 'id' => (int) $slot['id'] ),
+				array( 'id' => (int) $slot['id'], 'status' => 'planned' ),
 				array( '%s', '%s' ),
-				array( '%d' )
+				array( '%d', '%s' )
 			);
+
+			if ( ! $claimed ) {
+				continue;
+			}
 
 			$result = VMSAI_Composer::compose( $slot );
 
@@ -342,8 +353,17 @@ class VMSAI_Scheduler {
 				continue;
 			}
 
-			// Mark as processing immediately to prevent re-selection.
-			$wpdb->update( $table, array( 'status' => 'processing', 'updated_at' => current_time( 'mysql', true ) ), array( 'id' => (int) $row['id'] ) );
+			// Mark as processing immediately to prevent re-selection. The
+			// WHERE clause re-checks status = 'approved' so this is the
+			// actual claim on the row (see the matching comment in
+			// compose_due()) — without it, two overlapping ticks can both
+			// pass the SELECT above and both go on to publish() this same
+			// row, posting the same content twice on the live channel.
+			$claimed = $wpdb->update( $table, array( 'status' => 'processing', 'updated_at' => current_time( 'mysql', true ) ), array( 'id' => (int) $row['id'], 'status' => 'approved' ) );
+
+			if ( ! $claimed ) {
+				continue;
+			}
 
 			// Stress-Test Jitter: Avoid firing multiple requests simultaneously.
 			if ( $published > 0 ) {
@@ -641,11 +661,33 @@ class VMSAI_Scheduler {
 		global $wpdb;
 		$table = VMSAI_Install::table( 'queue' );
 
-		// Measure from current local day (WordPress timezone) to match user expectations.
+		// Measure from current local day (WordPress timezone) to match user
+		// expectations — but published_at is stored in UTC (current_time(
+		// 'mysql', true) when a post publishes), so comparing DATE(published_at)
+		// against a bare local Y-m-d silently dropped any post published in
+		// the first hours of the local day on a non-UTC site (its UTC date
+		// still belonged to yesterday). Compare against the UTC bounds of
+		// the local day instead.
+		try {
+			$tz    = wp_timezone();
+			$start = new DateTime( 'today', $tz );
+			$end   = new DateTime( 'tomorrow', $tz );
+			$start->setTimezone( new DateTimeZone( 'UTC' ) );
+			$end->setTimezone( new DateTimeZone( 'UTC' ) );
+			$from = $start->format( 'Y-m-d H:i:s' );
+			$to   = $end->format( 'Y-m-d H:i:s' );
+		} catch ( Exception $e ) {
+            // Fallback: use local day bounds converted to UTC.
+            $local_today = current_time( 'Y-m-d' ); // Local date (not UTC)
+            $from        = $local_today . ' 00:00:00';
+            $to          = gmdate( 'Y-m-d H:i:s', strtotime( $from ) + DAY_IN_SECONDS );
+		}
+
 		$today = (int) $wpdb->get_var( // phpcs:ignore
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM `$table` WHERE status = 'published' AND DATE(published_at) = %s", // phpcs:ignore
-				current_time( 'Y-m-d' )
+				"SELECT COUNT(*) FROM `$table` WHERE status = 'published' AND published_at >= %s AND published_at < %s", // phpcs:ignore
+				$from,
+				$to
 			)
 		);
 

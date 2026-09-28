@@ -102,6 +102,47 @@ class VMSAI_Channel_Tiktok extends VMSAI_Channel {
 
 		$publish_id = $init['json']['data']['publish_id'] ?? '';
 
+		if ( ! $publish_id ) {
+			return $this->fail( __( 'TikTok did not return a publish id.', 'vm-social-ai-pro' ) );
+		}
+
+		// PULL_FROM_URL is asynchronous: init only means TikTok accepted the
+		// request and will fetch/process the video in the background. Poll
+		// the real status for a bounded window so a definite FAILED (bad
+		// URL, rejected format, moderation reject) is caught and reported
+		// instead of the queue row being marked "published" while nothing
+		// ever actually posted. If it's still processing when the window
+		// closes, report success (best effort) rather than risk a retry
+		// re-uploading and double-posting a video that may finish fine.
+		$deadline = time() + 40;
+		while ( time() < $deadline ) {
+			sleep( 5 );
+
+			$status = VMSAI_Http::post( self::API_BASE . '/post/publish/status/fetch/', array(
+				'headers' => array(
+					'Authorization' => 'Bearer ' . $token,
+					'Content-Type'  => 'application/json',
+				),
+				'json'  => array( 'publish_id' => $publish_id ),
+				'scope' => 'channel.tiktok',
+			) );
+
+			if ( ! $status['ok'] ) {
+				continue;
+			}
+
+			$state = (string) ( $status['json']['data']['status'] ?? '' );
+
+			if ( 'PUBLISH_COMPLETE' === $state ) {
+				break;
+			}
+
+			if ( 'FAILED' === $state ) {
+				$reason = (string) ( $status['json']['data']['fail_reason'] ?? 'TikTok rejected the post.' );
+				return $this->fail( $reason );
+			}
+		}
+
 		return $this->ok( $publish_id, 'https://www.tiktok.com/' ); // TikTok doesn't return permalink immediately
 	}
 }

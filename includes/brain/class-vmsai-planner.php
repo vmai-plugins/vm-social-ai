@@ -395,7 +395,13 @@ class VMSAI_Planner {
 					$post = (array) $posts[ $cursor ];
 					$cursor++;
 
-					$best_hour = VMSAI_Analytics::get_optimal_hour( $channel );
+					// get_optimal_local_hour(), not get_optimal_hour(): slot_time
+				// below is interpreted as local wall-clock time by
+				// VMSAI_Composer::slot_timestamp(), but get_optimal_hour()
+				// returns a UTC hour — feeding that in directly used to get
+				// it converted to UTC a second time, drifting every
+				// "optimally timed" post by the timezone offset.
+				$best_hour = VMSAI_Analytics::get_optimal_local_hour( $channel );
 					$time_base = str_pad( $best_hour, 2, '0', STR_PAD_LEFT ) . ':00';
 
 					$jitter  = wp_rand( -15, 15 );

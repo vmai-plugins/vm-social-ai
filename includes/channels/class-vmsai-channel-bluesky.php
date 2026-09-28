@@ -62,22 +62,39 @@ class VMSAI_Channel_Bluesky extends VMSAI_Channel {
 
 		// Only attach images if we have a usable one — otherwise emit text-only.
 		$image = $this->media_url( $post );
-		if ( $image ) {
+		$path  = $this->media_path( $post );
+		if ( $image && $path ) {
+			// ATProto rejects blobs without an exact mime type — detect it
+			// from the actual file instead of assuming JPEG (generated
+			// images are frequently PNG/WEBP, and a mismatched
+			// Content-Type produces a blob Bluesky can't render).
+			$filetype = wp_check_filetype( $path );
+			$mime     = $filetype['type'] ?: 'image/jpeg';
+
 			// Register the image blob, fetch the handle, attach it.
 			$img_res = VMSAI_Http::post( self::API . '/com.atproto.repo.uploadBlob', array(
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $token,
-					// ATProto rejects blobs without an exact mime type.
-					'Content-Type'  => 'image/jpeg',
+					'Content-Type'  => $mime,
 				),
-				'body'    => file_get_contents( $this->media_path( $post ) ),
+				'body'    => file_get_contents( $path ),
 				'scope'   => 'channel.bluesky',
 				'timeout' => 30,
 			) );
-			if ( $img_res['ok'] && ! empty( $img_res['json']['blob']['uri'] ) ) {
+
+			// The upload response is {"blob": {"$type":"blob","ref":{...},
+			// "mimeType":...,"size":...}} — there is no "uri" field. The
+			// embed's "image" value must be that whole blob object, not a
+			// URL string.
+			if ( $img_res['ok'] && ! empty( $img_res['json']['blob'] ) ) {
 				$record['embed'] = array(
-					'$type'       => 'app.bsky.embed.images',
-					'images'      => array( array( 'image' => $img_res['json']['blob']['uri'] ) ),
+					'$type'  => 'app.bsky.embed.images',
+					'images' => array(
+						array(
+							'image' => $img_res['json']['blob'],
+							'alt'   => (string) ( $post['alt_text'] ?? '' ),
+						),
+					),
 				);
 			}
 		}

@@ -158,12 +158,19 @@ class VMSAI_Text_Engine {
 					array( 'model' => $result['model'], 'chars' => strlen( $result['text'] ) )
 				);
 
-				// Record Usage.
+				// Record Usage. usage_type defaults to 'generation' — the
+				// anchor VMSAI_Usage::check_allowance() counts against the
+				// plan's daily post limit — but internal QA/refinement
+				// sub-calls (the quality checkpass below, VMSAI_Critic's
+				// audit pass, viral rescoring, A/B variant drafts) pass
+				// 'audit' so composing ONE post doesn't silently consume
+				// several days' worth of quota on calls the user never
+				// asked for individually.
 				VMSAI_Usage::record( array(
 					'provider'   => $slug,
 					'model'      => $result['model'],
 					'modality'   => 'text',
-					'usage_type' => 'generation',
+					'usage_type' => (string) ( $args['usage_type'] ?? 'generation' ),
 					'tokens_in'  => (int) ( $result['usage']['prompt_tokens'] ?? ( strlen( $system . $prompt ) / 4 ) ),
 					'tokens_out' => (int) ( $result['usage']['completion_tokens'] ?? ( strlen( $result['text'] ) / 4 ) ),
 					'cost'       => (float) ( $result['usage']['total_cost'] ?? 0 ),
@@ -176,7 +183,7 @@ class VMSAI_Text_Engine {
 					$checker_system = $personas['critic'];
 					$checker_prompt = "Review this social post copy. If it sounds like generic AI (e.g. uses 'in today\'s world', 'let\'s dive in', or repetitive openers), reply with 'REVISE: [Reason]'. Otherwise reply 'PASS'.\n\nCOPY:\n" . $cleaned_text;
 
-					$check_res = $this->generate( $checker_system, $checker_prompt, array( 'persona' => 'critic', 'temperature' => 0.1 ) );
+					$check_res = $this->generate( $checker_system, $checker_prompt, array( 'persona' => 'critic', 'temperature' => 0.1, 'usage_type' => 'audit' ) );
 					if ( $check_res['ok'] && stripos($check_res['text'], 'REVISE') !== false ) {
 						$feedback = trim(str_ireplace('REVISE:', '', $check_res['text']));
 						VMSAI_Logger::info( 'engine.text', 'Quality check rejected copy. Attempting one-time rewrite.', array( 'reason' => $feedback ) );

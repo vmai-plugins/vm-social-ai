@@ -27,7 +27,11 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 	public function generate( $system, $prompt, array $args = array() ) {
 		$key      = VMSAI_Settings::credential( 'omniroute_key' );
 		$base_url = VMSAI_Settings::credential( 'omniroute_url' );
-		$model    = $args['model'] ?? 'gpt-4o';
+		$saved_m  = VMSAI_Settings::get( 'text_model', array() );
+		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'auto/best-coding' );
+		if ( empty( $model ) ) {
+			$model = 'auto/best-coding';
+		}
 
 		$messages = array(
 			array( 'role' => 'system', 'content' => $system ),
@@ -39,6 +43,7 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 			'messages'    => $messages,
 			'temperature' => (float) ( $args['temperature'] ?? 0.7 ),
 			'max_tokens'  => (int) ( $args['max_tokens'] ?? 1000 ),
+			'stream'      => false,
 		);
 
 		if ( ! empty( $args['json'] ) ) {
@@ -100,6 +105,9 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 			$id = $model['id'] ?? '';
 			if ( ! $id ) continue;
 
+			// Skip pure video models from text list
+			if ( str_contains( $id, 'veo-free' ) || str_contains( $id, 'veoaifree' ) ) continue;
+
 			$models[] = array(
 				'id'    => $id,
 				'label' => $model['name'] ?? $id,
@@ -111,9 +119,11 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 
 	private function default_models() {
 		return array(
-			array( 'id' => 'gpt-4o', 'label' => 'GPT-4o' ),
-			array( 'id' => 'claude-3-5-sonnet', 'label' => 'Claude 3.5 Sonnet' ),
-			array( 'id' => 'meta-llama/llama-3.1-405b-instruct', 'label' => 'Llama 3.1 405B' ),
+			array( 'id' => 'auto/best-coding', 'label' => 'Auto Best Coding (Recommended)' ),
+			array( 'id' => 'auto/best-chat', 'label' => 'Auto Best Chat' ),
+			array( 'id' => 'auto/best-free', 'label' => 'Auto Best Free' ),
+			array( 'id' => 'gemini-2.5-flash', 'label' => 'Google Gemini 2.5 Flash' ),
+			array( 'id' => 'auto/deepseek-v3', 'label' => 'DeepSeek V3' ),
 		);
 	}
 }

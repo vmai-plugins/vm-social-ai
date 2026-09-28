@@ -270,6 +270,15 @@ KEY WRITING ATTRIBUTES:
 		$data = $result['data'];
 		VMSAI_Logger::debug( 'composer', "Text generated successfully for slot #{$slot['id']}" );
 
+		// Robustness: If the AI returned a list with one item, pull it out.
+		// This must run before anything else reads $data['body'] /
+		// $data['viral_score'] — the carousel branch and the viral-rescoring
+		// block below both write those keys directly onto $data, which
+		// makes isset($data['body']) true and permanently defeats this
+		// unwrap check if it runs after them, burying the real content in
+		// $data[0].
+		$data = self::unwrap_list( $data );
+
 		// CAROUSEL HANDLER: Generate slides if format is carousel.
 		if ( 'carousel' === $slot['format'] ) {
 			return self::compose_carousel( $slot, $data, $spec );
@@ -286,16 +295,11 @@ KEY WRITING ATTRIBUTES:
 				. "3. Ensure the CTA creates FOMO.\n\n"
 				. "Return ONLY JSON with the updated body and viral_score (target 85+).";
 
-			$viral_result = vmsai()->text_engine()->generate_json( $viral_system, $viral_prompt, array( 'temperature' => 0.95 ) );
+			$viral_result = vmsai()->text_engine()->generate_json( $viral_system, $viral_prompt, array( 'temperature' => 0.95, 'usage_type' => 'audit' ) );
 			if ( ! empty( $viral_result['ok'] ) ) {
 				$data['body'] = $viral_result['data']['body'] ?? $data['body'];
 				$data['viral_score'] = $viral_result['data']['viral_score'] ?? 85;
 			}
-		}
-
-		// Robustness: If the AI returned a list with one item, pull it out.
-		if ( isset( $data[0] ) && is_array( $data[0] ) && ! isset( $data['body'] ) ) {
-			$data = $data[0];
 		}
 
 		// Pro Feature: Automatic A/B Testing with Reinforcement Learning.
@@ -315,9 +319,14 @@ KEY WRITING ATTRIBUTES:
 
 			if ( $use_b ) {
 				$variant_prompt = $prompt . "\n\nVariant B Task: Rewrite the post copy with a completely different hook (e.g. if the first was a question, make this a bold statement). Keep all other JSON keys the same.";
-				$variant_result = vmsai()->text_engine()->generate_json( $system, $variant_prompt, array( 'max_tokens' => 2000, 'temperature' => 0.95 ) );
+				$variant_result = vmsai()->text_engine()->generate_json( $system, $variant_prompt, array( 'max_tokens' => 2000, 'temperature' => 0.95, 'usage_type' => 'audit' ) );
 				if ( ! empty( $variant_result['ok'] ) ) {
-					$data = $variant_result['data'];
+					// Same list-JSON shape the model can return here as for
+					// the initial generation — this reassignment happens
+					// after that earlier one-time unwrap already ran, so it
+					// must be re-applied or a list-wrapped variant silently
+					// loses its body/hashtags/cta/etc.
+					$data = self::unwrap_list( $variant_result['data'] );
 					$variant = 'b';
 				}
 			}
@@ -360,7 +369,7 @@ KEY WRITING ATTRIBUTES:
 			$fix = vmsai()->text_engine()->generate_json(
 				'You fill in missing metadata for a finished social post. Be specific and grounded in the business context given, never generic.',
 				$fix_prompt,
-				array( 'max_tokens' => 300, 'temperature' => 0.6 )
+				array( 'max_tokens' => 300, 'temperature' => 0.6, 'usage_type' => 'audit' )
 			);
 
 			if ( ! empty( $fix['ok'] ) ) {
@@ -516,51 +525,115 @@ KEY WRITING ATTRIBUTES:
 	 * Compose a carousel post with multiple slides.
 	 */
 	private static function compose_carousel( array $slot, array $data, array $spec ) {
-		$system = 'You are a Social Media Storyteller. You turn complex topics into highly engaging 5-slide carousels. Each slide must have its own concise copy and image prompt.';
+		$channel = (string) $slot['channel'];
 
-		$prompt = VMSAI_Brain::context() . "\n\n"
+		// AGENT ROUTING + VISUAL DNA: mirror the single-post flow so carousel
+		// slides get the same brand colors/fonts/visual style instead of a
+		// generic, brand-blind image prompt (this was the main reason
+		// carousel art came back as unrelated abstract imagery).
+		if ( ! empty( $slot['agent_id'] ) ) {
+			$agent = VMSAI_Agents::get( (int) $slot['agent_id'] );
+		} else {
+			$agent = VMSAI_Agents::get( VMSAI_Agents::route( $slot['pillar'] ) );
+		}
+
+		$brand_kit = array(
+			'primary'   => VMSAI_Brain::get( 'brand_color_1' ),
+			'secondary' => VMSAI_Brain::get( 'brand_color_2' ),
+			'fonts'     => VMSAI_Brain::get( 'brand_fonts' ),
+			'vibe'      => VMSAI_Brain::get( 'visual_reference' ),
+		);
+
+		$image_style = "Style: {$agent['visual']}. ";
+		if ( ! empty( $brand_kit['primary'] ) ) $image_style .= "USE BRAND COLORS: {$brand_kit['primary']} and {$brand_kit['secondary']}. ";
+		if ( ! empty( $brand_kit['fonts'] ) )   $image_style .= "TYPOGRAPHY: {$brand_kit['fonts']}. ";
+		if ( ! empty( $brand_kit['vibe'] ) )    $image_style .= "OVERALL AESTHETIC: {$brand_kit['vibe']}. ";
+		$image_style .= 'No literal text unless the slide is clearly a quote/stat card.';
+
+		$system = $agent['persona'] . ' You are a Social Media Storyteller and Elite Agency-Grade Content Architect. You turn complex topics into highly engaging 5-slide carousels that stay grounded in the real business, never generic stock-photo abstraction.';
+
+		$prompt = VMSAI_Brain::context( $channel ) . "\n\n"
 			. "CREATE A 5-SLIDE CAROUSEL FOR: {$slot['topic']}\n"
-			. "Strategic Angle: {$slot['angle']}\n\n"
+			. "Strategic Angle: {$slot['angle']}\n"
+			. "Target SEO Keyword: {$slot['keyword']}\n\n"
 			. "STRUCTURE:\n"
 			. "Slide 1: THE HOOK. Must stop the scroll.\n"
-			. "Slide 2-4: THE VALUE. Three key points or steps.\n"
+			. "Slide 2-4: THE VALUE. Three key points or steps. Work the SEO keyword in naturally across these slides.\n"
 			. "Slide 5: THE CTA. What to do next.\n\n"
-			. "Return ONLY JSON: {\"slides\": [{\"body\":\"...\", \"image_prompt\":\"...\"}, ...]}";
+			. "REQUIRED JSON RESPONSE STRUCTURE:\n"
+			. "  slides — array of exactly 5 objects, each with:\n"
+			. "    body        — the slide's on-screen copy, short and punchy.\n"
+			. "    image_prompt — a LITERAL, CONCRETE commercial photo/graphic brief for THIS specific slide's point (a real scene, person, product or data visual — never an abstract concept like 'a glowing orb' or 'floating icons'). Use: {$image_style}\n"
+			. "    alt_text    — descriptive, SEO-optimized alt text for this slide's image.\n\n"
+			. "CRITICAL RULES:\n"
+			. "- Every image_prompt must visually depict the specific idea in that slide's body, not a generic restatement of the whole topic.\n"
+			. "- Never mention you are an AI. Speak as the business owner/expert.\n"
+			. "- NO AI FLUFF: never 'In today's fast-paced world' or 'Are you looking to...'.\n\n"
+			. "Return ONLY JSON: {\"slides\": [{\"body\":\"...\", \"image_prompt\":\"...\", \"alt_text\":\"...\"}, ...]}";
 
-		$result = vmsai()->text_engine()->generate_json( $system, $prompt, array( 'max_tokens' => 2000 ) );
+		$result = vmsai()->text_engine()->generate_json( $system, $prompt, array( 'max_tokens' => 2000, 'temperature' => 0.7 ) );
 
 		if ( empty($result['ok']) ) {
 			return array( 'ok' => false, 'queue_id' => 0, 'error' => $result['error'] );
 		}
 
 		$slides = $result['data']['slides'] ?? array();
+
+		// Carousel slides are scored once as a set rather than per-slide
+		// (the topic/angle/keyword are shared) — reuse the score already
+		// produced by the initial compose() JSON call instead of either
+		// leaving every slide's seo_score/viral_score at 0 or paying for a
+		// second full critic pass per slide.
+		$seo_score   = min( 100, max( 0, (int) ( $data['seo_score'] ?? 0 ) ) );
+		$viral_score = min( 100, max( 0, (int) ( $data['viral_score'] ?? 0 ) ) );
+
 		$parent_id = 0;
 
 		foreach ( $slides as $i => $slide ) {
-			$image = vmsai()->image_engine()->create( $slide['image_prompt'], array( 'topic' => $slot['topic'] . " Slide " . ($i+1) ) );
+			$image = vmsai()->image_engine()->create(
+				(string) ( $slide['image_prompt'] ?? $slot['topic'] ),
+				array(
+					'channel' => $channel,
+					'format'  => 'image',
+					'topic'   => $slot['topic'] . ' — Slide ' . ( $i + 1 ),
+					'keyword' => $slot['keyword'],
+					'alt'     => $slide['alt_text'] ?? '',
+					'prompt'  => $slide['image_prompt'] ?? '',
+				)
+			);
 
 			$row = array(
 				'plan_id'        => (int) $slot['id'],
 				'parent_id'      => $parent_id,
 				'campaign_id'    => (int) $slot['campaign_id'],
-				'channel'        => $slot['channel'],
+				'channel'        => $channel,
 				'format'         => 'carousel_slide',
 				'title'          => "Slide " . ($i+1),
-				'body'           => $slide['body'],
+				'body'           => $slide['body'] ?? '',
 				'media_id'       => (int) ( $image['attachment_id'] ?? 0 ),
 				'media_url'      => $image['url'] ?? '',
-				'image_prompt'   => $slide['image_prompt'],
+				'image_prompt'   => $slide['image_prompt'] ?? '',
+				'alt_text'       => (string) ( $image['alt'] ?? ( $slide['alt_text'] ?? '' ) ),
+				'seo_score'      => $seo_score,
+				'viral_score'    => $viral_score,
 				'text_provider'  => $result['provider'],
 				'image_provider' => $image['provider'] ?? '',
-				'status'         => 'approved',
+				// initial_status(), not a hardcoded 'approved' — a carousel
+				// must respect the same autonomy/require_approval gate every
+				// other format goes through, or it silently skips review an
+				// operator explicitly turned on for that channel.
+				'status'         => self::initial_status( $channel ),
 				'scheduled_at'   => self::slot_timestamp( $slot ),
 			);
 
 			$id = self::save( $row );
 			if ( $i === 0 ) {
 				$parent_id = $id;
-				// Update the parent's body to include hashtags/cta from original data if needed
-				$full_body = $slide['body'] . "\n\n" . ( $data['cta'] ?? '' ) . "\n\n" . implode(' ', array_map(fn($h) => '#'.$h, self::normalise_hashtags($data['hashtags'] ?? [], 5)));
+				// Update the parent's body to include hashtags/cta from
+				// original data if needed. Uses $spec['hashtags'] (the
+				// channel's own cap, already in scope), not a hardcoded 5 —
+				// e.g. GBP's spec is 0 ("no hashtags, no emoji clutter").
+				$full_body = ( $slide['body'] ?? '' ) . "\n\n" . ( $data['cta'] ?? '' ) . "\n\n" . implode(' ', array_map(fn($h) => '#'.$h, self::normalise_hashtags($data['hashtags'] ?? [], (int) $spec['hashtags'])));
 				global $wpdb;
 				$wpdb->update( VMSAI_Install::table('queue'), array('body' => $full_body), array('id' => $id) );
 			}
@@ -605,6 +678,22 @@ KEY WRITING ATTRIBUTES:
 
 		$requires = (array) VMSAI_Settings::get( 'require_approval', array() );
 		return empty( $requires[ $channel ] ) ? 'approved' : 'draft';
+	}
+
+	/**
+	 * Some models answer a "return one JSON object" instruction with a
+	 * one-item JSON array instead. Pull the object out so every caller
+	 * gets the flat shape it expects instead of silently losing the
+	 * content under a numeric key.
+	 *
+	 * @param array $data Raw decoded JSON.
+	 * @return array
+	 */
+	private static function unwrap_list( array $data ) {
+		if ( isset( $data[0] ) && is_array( $data[0] ) && ! isset( $data['body'] ) ) {
+			return $data[0];
+		}
+		return $data;
 	}
 
 	/**
@@ -717,7 +806,12 @@ KEY WRITING ATTRIBUTES:
 	 * @return string
 	 */
 	private static function enforce_limit( $body, $limit, array $hashtags, $channel ) {
-		$tag_length = $hashtags ? strlen( implode( ' #', $hashtags ) ) + 3 : 0;
+		// mb_strlen(), not strlen(): hashtags can be Unicode (the Hinglish/
+		// Hindi locale flavours support native-script tags), and $ceiling
+		// is compared against mb_strlen($body) below — mixing byte length
+		// here overcounted multi-byte tags by up to 3x and truncated the
+		// body shorter than the channel's real character limit required.
+		$tag_length = $hashtags ? mb_strlen( implode( ' #', $hashtags ) ) + 3 : 0;
 		$ceiling    = $limit - $tag_length - 120; // Room for a long tracked link (UTMs etc)
 
 		if ( mb_strlen( $body ) <= $ceiling ) {

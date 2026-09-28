@@ -123,8 +123,20 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 	 */
 	private function trim_prompt( $prompt ) {
 		$prompt = preg_replace( '/\s+/', ' ', trim( (string) $prompt ) );
+
 		// Pro Tip: URL length is strictly capped by some CDNs (HTTP 431).
-		// 300 chars is safer against HTTP 431 (Header/URL too large) errors.
-		return mb_substr( $prompt, 0, 300 );
+		// Stay conservative, but cut on a word boundary rather than
+		// mid-word — a prompt chopped inside a word (e.g. "profession")
+		// confuses the model's own prompt "enhance" pass and is a real
+		// contributor to vague/off-topic renders.
+		$limit = 350;
+		if ( mb_strlen( $prompt ) <= $limit ) {
+			return $prompt;
+		}
+
+		$trimmed = mb_substr( $prompt, 0, $limit );
+		$cut     = mb_strrpos( $trimmed, ' ' );
+
+		return $cut ? mb_substr( $trimmed, 0, $cut ) : $trimmed;
 	}
 }

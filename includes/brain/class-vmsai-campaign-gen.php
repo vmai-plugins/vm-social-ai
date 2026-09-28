@@ -242,7 +242,13 @@ class VMSAI_Campaign_Gen {
 		// ... (keep logic)
 		$best_hours = array();
 		foreach ( $channels as $channel ) {
-			$best_hours[ $channel ] = (int) VMSAI_Analytics::get_optimal_hour( $channel );
+			// get_optimal_local_hour(), not get_optimal_hour(): the value
+			// below is stored as a wall-clock slot_time that
+			// VMSAI_Composer::slot_timestamp() later converts from local to
+			// UTC — feeding it the already-UTC hour would convert it twice
+			// and drift every slot's actual posting time by the timezone
+			// offset.
+			$best_hours[ $channel ] = VMSAI_Analytics::get_optimal_local_hour( $channel );
 		}
 
 		$details = sanitize_textarea_field( (string) ( $args['details'] ?? '' ) );

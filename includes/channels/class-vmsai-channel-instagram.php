@@ -226,7 +226,7 @@ class VMSAI_Channel_Instagram extends VMSAI_Channel {
 			'json' => array(
 				'media_type' => 'CAROUSEL',
 				'children' => $children,
-				'caption' => $this->caption( $post, false, true ),
+				'caption' => mb_substr( $this->caption( $post, false, true ), 0, 2200 ),
 				'access_token' => $token
 			)
 		) );

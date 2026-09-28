@@ -53,6 +53,8 @@ endif;
 
 <script>
 (function($) {
+	var esc = VMSAI.esc;
+
 	function refreshResearch() {
 		var $grid = $('#vmsai-research-trends');
 		$grid.html('<div style="grid-column: 1 / -1; text-align: center; padding: 60px 0; color: var(--muted);"><p>Scanning industry signals...</p></div>');
@@ -71,8 +73,8 @@ endif;
 					'<div class="vmsai-trend-card-pro">' +
 						'<div>' +
 							'<div class="vmsai-pill vmsai-pill--good" style="margin-bottom: 15px; display: inline-block;">NEW SIGNAL</div>' +
-							'<h4>' + t.title + '</h4>' +
-							'<p>' + t.full + '</p>' +
+							'<h4>' + esc(t.title) + '</h4>' +
+							'<p>' + esc(t.full) + '</p>' +
 						'</div>' +
 						'<button class="vmsai-btn vmsai-btn--gold" data-vmsai-action="inject-trend" data-trend="' + btoa(t.full) + '">⚡ News-Jack This</button>' +
 					'</div>'

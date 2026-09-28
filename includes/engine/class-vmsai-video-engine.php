@@ -101,9 +101,10 @@ class VMSAI_Video_Engine {
 
 		if ( 'omniroute' === $slug ) {
 			$models = array(
-				array( 'id' => 'luma-dream-machine', 'label' => 'Luma Dream Machine' ),
-				array( 'id' => 'kling', 'label' => 'Kling AI' ),
-				array( 'id' => 'runway-gen3', 'label' => 'Runway Gen-3' ),
+				array( 'id' => 'veo-free/veo', 'label' => 'Google Veo Free (Recommended)' ),
+				array( 'id' => 'veoaifree-web/veo', 'label' => 'Veo AI Free Web' ),
+				array( 'id' => 'veo-free/seedance', 'label' => 'ByteDance Seedance Free' ),
+				array( 'id' => 'auto/inkling', 'label' => 'Auto Inkling Video' ),
 			);
 		}
 
@@ -225,7 +226,7 @@ class VMSAI_Video_Engine {
 			'minimax'      => 'video-01',
 			'luma'         => 'dream-machine',
 			'heygen'       => 'avatar-v2',
-			'omniroute'    => 'luma-dream-machine',
+			'omniroute'    => 'veo-free/veo',
 			'cogvideox'    => 'cogvideox-5b',
 			'pollinations' => 'flux-video',
 			'pexels'       => 'stock-video',
@@ -459,12 +460,14 @@ class VMSAI_Video_Engine {
 		}
 
 		// CogVideoX on HF Inference can return a video binary directly.
-		// If the response looks like JSON (task metadata), poll the status.
+		// If the response looks like JSON (task metadata), it is never
+		// itself the video — resolve it to a definite success or failure
+		// instead of ever falling through to treat the JSON text as binary.
 		$body = $res['body'];
 		if ( '[' === $body[0] || '{' === $body[0] ) {
 			$meta = json_decode( $body, true );
 			if ( is_array( $meta ) ) {
-				$status = is_array( $meta ) && isset( $meta['status'] ) ? (string) $meta['status'] : '';
+				$status = isset( $meta['status'] ) ? (string) $meta['status'] : '';
 				if ( 'succeeded' === $status && ! empty( $meta['output_video'] ) ) {
 					$download = VMSAI_Http::get( $meta['output_video'], array( 'scope' => 'engine.video.cogvideox', 'timeout' => 60 ) );
 					return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
@@ -472,7 +475,11 @@ class VMSAI_Video_Engine {
 				if ( in_array( $status, array( 'failed', 'error', 'canceled' ), true ) ) {
 					return array( 'ok' => false, 'binary' => '', 'error' => 'HF CogVideoX generation failed.' );
 				}
-				// Still pending — fall through; the binary didn't download yet.
+				// Anything else — still pending, or a JSON shape with no
+				// output yet. There is no poll loop here, so report it as
+				// not-ready rather than handing the raw JSON text back as
+				// if it were a finished .mp4.
+				return array( 'ok' => false, 'binary' => '', 'error' => 'CogVideoX generation is still processing.' );
 			}
 		}
 
@@ -502,9 +509,17 @@ class VMSAI_Video_Engine {
 		$body = $res['body'];
 		if ( '{' === $body[0] ) {
 			$meta = json_decode( $body, true );
-			if ( is_array( $meta ) && isset( $meta['video_url'] ) ) {
-				$download = VMSAI_Http::get( $meta['video_url'], array( 'scope' => 'engine.video.svd', 'timeout' => 60 ) );
-				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+			if ( is_array( $meta ) ) {
+				if ( ! empty( $meta['video_url'] ) ) {
+					$download = VMSAI_Http::get( $meta['video_url'], array( 'scope' => 'engine.video.svd', 'timeout' => 60 ) );
+					return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
+				}
+				// A JSON body without a video_url is a pending/error
+				// descriptor, never a video — this used to fall through and
+				// hand the raw JSON text back as if it were a finished
+				// binary.
+				$error = (string) ( $meta['error'] ?? $meta['message'] ?? '' );
+				return array( 'ok' => false, 'binary' => '', 'error' => $error ?: 'SVD did not return a finished video.' );
 			}
 		}
 
@@ -840,8 +855,21 @@ class VMSAI_Video_Engine {
 			if ( ! $status['ok'] ) continue;
 
 			$state = $status['json']['status'] ?? '';
-			if ( 'Success' === $state && ! empty( $status['json']['file_url'] ) ) {
-				$download = VMSAI_Http::get( $status['json']['file_url'], array( 'timeout' => 60 ) );
+			if ( 'Success' === $state && ! empty( $status['json']['file_id'] ) ) {
+				// query_video_generation returns file_id, never a file_url —
+				// checking file_url meant a genuinely successful generation
+				// was indistinguishable from "still processing" and this
+				// always fell through to a timeout. The actual download URL
+				// has to be resolved via the Files (Retrieve) endpoint.
+				$file = VMSAI_Http::get(
+					$base . '/files/retrieve?file_id=' . rawurlencode( (string) $status['json']['file_id'] ),
+					array( 'headers' => array( 'Authorization' => 'Bearer ' . $key ), 'scope' => 'engine.video.minimax' )
+				);
+				$download_url = $file['json']['file']['download_url'] ?? '';
+				if ( ! $download_url ) {
+					return array( 'ok' => false, 'binary' => '', 'error' => 'Minimax succeeded but returned no download URL.' );
+				}
+				$download = VMSAI_Http::get( $download_url, array( 'timeout' => 60 ) );
 				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
 			}
 
@@ -862,7 +890,10 @@ class VMSAI_Video_Engine {
 			return array( 'ok' => false, 'binary' => '', 'error' => 'Luma API key missing.' );
 		}
 
-		$base = 'https://api.lumalabs.ai/v1';
+		// The real Dream Machine API lives under /dream-machine/v1, not a
+		// bare /v1 — every create/poll call against the old base 404'd, so
+		// Luma never produced a video regardless of a valid key.
+		$base = 'https://api.lumalabs.ai/dream-machine/v1';
 		$res  = VMSAI_Http::post( $base . '/generations', array(
 			'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 			'json'    => array(
@@ -915,53 +946,59 @@ class VMSAI_Video_Engine {
 			return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute credentials missing.' );
 		}
 
-		$model = VMSAI_Settings::get( 'video_model' )['omniroute'] ?? 'luma-dream-machine';
+		$saved_m = VMSAI_Settings::get( 'video_model', array() );
+		$model   = $saved_m['omniroute'] ?? 'veo-free/veo';
+		if ( empty( $model ) || 'luma-dream-machine' === $model ) {
+			$model = 'veo-free/veo';
+		}
 
-		$res = VMSAI_Http::post( rtrim( $url, '/' ) . '/video/generations', array(
+		$res = VMSAI_Http::post( rtrim( $url, '/' ) . '/videos/generations', array(
 			'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 			'json'    => array(
 				'prompt' => $prompt,
 				'model'  => $model,
 			),
 			'scope'   => 'engine.video.omniroute',
-			'timeout' => 300
+			'timeout' => 300,
 		) );
 
-		if ( ! $res['ok'] || empty( $res['json']['id'] ) ) {
-			// Some providers might return the video URL directly if they don't use polling
-			if ( ! empty( $res['json']['data'][0]['url'] ) ) {
-				$download = VMSAI_Http::get( $res['json']['data'][0]['url'], array( 'timeout' => 120 ) );
-				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
-			}
-			return array( 'ok' => false, 'binary' => '', 'error' => $res['error'] ?: 'Failed to create OmniRoute task.' );
+		// Direct response format (OpenAI compatible video generation or gateway direct URL)
+		$direct_url = $res['json']['data'][0]['url'] ?? $res['json']['url'] ?? $res['json']['video_url'] ?? $res['json']['output_url'] ?? '';
+		if ( ! empty( $direct_url ) ) {
+			$download = VMSAI_Http::get( $direct_url, array( 'timeout' => 120 ) );
+			return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
 		}
 
-		$task_id = $res['json']['id'];
+		$task_id = $res['json']['id'] ?? $res['json']['task_id'] ?? '';
+		if ( ! $res['ok'] || empty( $task_id ) ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => $res['error'] ?: 'Failed to create OmniRoute video task.' );
+		}
 
 		// Cron-safe polling: a few short waits per call (bounded, with an
 		// absolute deadline), never a multi-minute sleep block.
 		$deadline = time() + 50;
-		for ( $i = 0; $i < 5 && time() < $deadline; $i++ ) {
+		for ( $i = 0; $i < 6 && time() < $deadline; $i++ ) {
 			self::poll_pause( 8 );
-			$status = VMSAI_Http::get( rtrim( $url, '/' ) . '/video/generations/' . $task_id, array(
+			$status = VMSAI_Http::get( rtrim( $url, '/' ) . '/videos/generations/' . $task_id, array(
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
-				'scope'   => 'engine.video.omniroute'
+				'scope'   => 'engine.video.omniroute',
 			) );
 
 			if ( ! $status['ok'] ) continue;
 
 			$state = $status['json']['status'] ?? $status['json']['state'] ?? '';
-			if ( in_array( $state, array( 'completed', 'Success', 'succeeded' ) ) && ! empty( $status['json']['url'] ) ) {
-				$download = VMSAI_Http::get( $status['json']['url'], array( 'timeout' => 120 ) );
+			$poll_url = $status['json']['url'] ?? $status['json']['video_url'] ?? $status['json']['data'][0]['url'] ?? '';
+			if ( in_array( $state, array( 'completed', 'Success', 'succeeded' ) ) && ! empty( $poll_url ) ) {
+				$download = VMSAI_Http::get( $poll_url, array( 'timeout' => 120 ) );
 				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
 			}
 
 			if ( in_array( $state, array( 'failed', 'Fail', 'error' ) ) ) {
-				return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute generation failed.' );
+				return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute video generation failed.' );
 			}
 		}
 
-		return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute generation timed out.' );
+		return array( 'ok' => false, 'binary' => '', 'error' => 'OmniRoute video generation timed out.' );
 	}
 
 	/**
@@ -1009,12 +1046,19 @@ class VMSAI_Video_Engine {
 
 			if ( ! $status['ok'] ) continue;
 
-			if ( 'completed' === $status['json']['data']['status'] ) {
-				$download = VMSAI_Http::get( $status['json']['data']['video_url'], array( 'timeout' => 60 ) );
+			// A safe ?? '' fallback, not a direct nested-key dereference —
+			// an error body like {"code":404,"data":null} (a real shape
+			// HeyGen can return mid-poll) would otherwise throw undefined-
+			// array-key/null-access warnings, unlike every sibling
+			// provider's polling code.
+			$state = $status['json']['data']['status'] ?? '';
+
+			if ( 'completed' === $state ) {
+				$download = VMSAI_Http::get( $status['json']['data']['video_url'] ?? '', array( 'timeout' => 60 ) );
 				return array( 'ok' => $download['ok'], 'binary' => $download['body'] ?? '', 'error' => $download['error'] );
 			}
 
-			if ( 'failed' === $status['json']['data']['status'] ) return array( 'ok' => false, 'binary' => '', 'error' => 'HeyGen failed.' );
+			if ( 'failed' === $state ) return array( 'ok' => false, 'binary' => '', 'error' => 'HeyGen failed.' );
 		}
 
 		return array( 'ok' => false, 'binary' => '', 'error' => 'HeyGen timeout.' );

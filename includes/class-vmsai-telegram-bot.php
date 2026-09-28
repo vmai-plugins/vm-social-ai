@@ -19,9 +19,51 @@ class VMSAI_Telegram_Bot {
 			register_rest_route( 'vm-social-ai/v1', '/telegram/webhook', array(
 				'methods'  => 'POST',
 				'callback' => array( $this, 'handle_webhook' ),
-				'permission_callback' => '__return_true', // Telegram validates via Token in URL or payload
+				// The claim in the old comment here ("Telegram validates via
+				// Token in URL or payload") was never actually true — nothing
+				// checked Telegram's secret_token header, so anyone who found
+				// this URL (printed in plain text on the Channels admin page)
+				// could POST forged updates directly. verify_request() below
+				// checks it when a secret is configured (see channels.php for
+				// the header to set on Telegram's own setWebhook call); it
+				// stays permissive when none is set so existing webhooks set
+				// up before this fix don't break.
+				'permission_callback' => array( $this, 'verify_request' ),
 			) );
 		} );
+	}
+
+	/**
+	 * Verify the request actually came from Telegram, when a webhook
+	 * secret has been configured.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool
+	 */
+	public function verify_request( WP_REST_Request $request ) {
+		$secret = VMSAI_Settings::credential( 'telegram_webhook_secret' );
+		if ( ! $secret ) {
+			return true;
+		}
+		$sent = (string) $request->get_header( 'X-Telegram-Bot-Api-Secret-Token' );
+		return hash_equals( (string) $secret, $sent );
+	}
+
+	/**
+	 * The webhook secret Telegram is expected to echo back on every update
+	 * via the X-Telegram-Bot-Api-Secret-Token header (set as the
+	 * secret_token parameter on Telegram's own setWebhook call — see the
+	 * Channels admin screen). Generated and persisted once on first use.
+	 *
+	 * @return string
+	 */
+	public static function webhook_secret() {
+		$secret = VMSAI_Settings::credential( 'telegram_webhook_secret' );
+		if ( ! $secret ) {
+			$secret = wp_generate_password( 32, false, false );
+			VMSAI_Settings::update_credentials( array( 'telegram_webhook_secret' => $secret ) );
+		}
+		return $secret;
 	}
 
 	/**
@@ -67,18 +109,35 @@ class VMSAI_Telegram_Bot {
 
 		// 2. Command: /start (Secure the bot)
 		if ( strpos( $text, '/start' ) === 0 ) {
+			// The pairing secret is a fixed, never-rotating 8-hex-char value
+			// (32 bits) — throttle guesses instead of allowing unlimited
+			// attempts against it.
+			$attempts_key = 'vmsai_tg_pair_attempts';
+			$attempts     = (int) get_transient( $attempts_key );
+			if ( $attempts >= 10 ) {
+				return new WP_REST_Response( array( 'ok' => true ), 200 );
+			}
+
 			$pass = substr( $text, 7 );
 			if ( $pass === substr( wp_hash( home_url() ), 0, 8 ) ) {
+				delete_transient( $attempts_key );
 				VMSAI_Settings::update( array( 'telegram_owner_id' => $chat_id ) );
 				$this->reply( $chat_id, "🤝 <b>Command Center Connected!</b>\nYou are now the authorized owner of this Social AI instance." );
 			} else {
+				set_transient( $attempts_key, $attempts + 1, HOUR_IN_SECONDS );
 				$this->reply( $chat_id, "❌ <b>Authorization Failed.</b>\nPlease use the secret link provided in your Social AI Settings." );
 			}
 			return new WP_REST_Response( array( 'ok' => true ), 200 );
 		}
 
-		// Security: Only process if owner matches
-		if ( (int) $chat_id !== (int) VMSAI_Settings::get( 'telegram_owner_id' ) ) {
+		// Security: Only process if an owner is actually paired and matches.
+		// A bare chat_id !== check without the <= 0 guard let a chat_id of 0
+		// (an omitted/forged chat.id) satisfy the comparison whenever
+		// telegram_owner_id was still unset — a forged request could then
+		// run commands like /write before anyone ever paired the bot. This
+		// mirrors the guard handle_callback() already has below.
+		$owner = (int) VMSAI_Settings::get( 'telegram_owner_id' );
+		if ( $owner <= 0 || $chat_id !== $owner ) {
 			return new WP_REST_Response( array( 'ok' => true ), 200 );
 		}
 

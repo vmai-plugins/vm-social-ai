@@ -63,7 +63,15 @@ class VMSAI_RAG {
 			if ( method_exists( $rss, 'get_items' ) ) {
 				$items = $rss->get_items( 0, 5 );
 				foreach ( $items as $item ) {
-					$summaries[] = $item->get_title() . ': ' . wp_trim_words( $item->get_description(), 30 );
+					// Feed content is external and untrusted — it flows
+					// straight into the AI generation prompt (see
+					// VMSAI_Brain::context()), so strip markup from the
+					// title too (wp_trim_words() already strips it from the
+					// description) and cap its length rather than passing
+					// an arbitrary-length, unstripped string through.
+					$title = wp_strip_all_tags( (string) $item->get_title() );
+					$title = mb_substr( trim( $title ), 0, 200 );
+					$summaries[] = $title . ': ' . wp_trim_words( $item->get_description(), 30 );
 				}
 			}
 		}

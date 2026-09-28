@@ -39,14 +39,18 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 	public function create( $prompt, array $args = array() ) {
 		$key      = VMSAI_Settings::credential( 'omniroute_key' );
 		$base_url = VMSAI_Settings::credential( 'omniroute_url' );
-		$model    = VMSAI_Settings::get( 'image_model' )['omniroute'] ?? 'flux';
+		$saved_m  = VMSAI_Settings::get( 'image_model', array() );
+		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'aihorde/stable_diffusion' );
+
+		if ( empty( $model ) || 'flux' === $model || 'nvidia/black-forest-labs/flux.1-schnell' === $model ) {
+			$model = 'aihorde/stable_diffusion';
+		}
 
 		$payload = array(
-			'model'           => $model,
-			'prompt'          => $prompt,
-			'n'               => 1,
-			'size'            => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
-			'response_format' => 'b64_json',
+			'model'  => $model,
+			'prompt' => $prompt,
+			'n'      => 1,
+			'size'   => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
 		);
 
 		$response = VMSAI_Http::post(
@@ -55,6 +59,7 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 				'json'    => $payload,
 				'scope'   => 'engine.image.omniroute',
+				'timeout' => 45,
 				'retries' => 1,
 			)
 		);
@@ -63,25 +68,42 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 			return $this->fail( $response['error'] );
 		}
 
-		$b64 = $response['json']['data'][0]['b64_json'] ?? '';
-
+		$binary = '';
+		$b64 = $response['json']['data'][0]['b64_json'] ?? $response['json']['data'][0]['b64'] ?? '';
 		if ( $b64 ) {
-			$binary = base64_decode( $b64, true );
-			if ( $binary ) {
-				return array( 'ok' => true, 'binary' => $binary, 'url' => '', 'mime' => 'image/png', 'credit' => 'Generated via OmniRoute', 'error' => '' );
-			}
+			$binary = base64_decode( $b64, true ) ?: '';
 		}
 
 		// Some proxies might return a URL instead of b64
-		$url = $response['json']['data'][0]['url'] ?? '';
-		if ( $url ) {
-			$binary = VMSAI_Http::fetch_binary( $url );
-			if ( $binary ) {
-				return array( 'ok' => true, 'binary' => $binary, 'url' => '', 'mime' => 'image/png', 'credit' => 'Generated via OmniRoute', 'error' => '' );
+		if ( empty( $binary ) ) {
+			$url = $response['json']['data'][0]['url'] ?? $response['json']['url'] ?? '';
+			if ( $url ) {
+				$binary = VMSAI_Http::fetch_binary( $url, 45 ) ?: '';
 			}
 		}
 
-		return $this->fail( __( 'OmniRoute returned no usable image.', 'vm-social-ai-pro' ) );
+		if ( empty( $binary ) ) {
+			return $this->fail( __( 'OmniRoute returned no usable image.', 'vm-social-ai-pro' ) );
+		}
+
+		// Accurate MIME detection from binary magic bytes
+		$mime = 'image/png';
+		if ( 0 === strncmp( $binary, 'RIFF', 4 ) && 'WEBP' === substr( $binary, 8, 4 ) ) {
+			$mime = 'image/webp';
+		} elseif ( 0 === strncmp( $binary, "\xFF\xD8\xFF", 3 ) ) {
+			$mime = 'image/jpeg';
+		} elseif ( 0 === strncmp( $binary, "\x89PNG", 4 ) ) {
+			$mime = 'image/png';
+		}
+
+		return array(
+			'ok'     => true,
+			'binary' => $binary,
+			'url'    => '',
+			'mime'   => $mime,
+			'credit' => 'Generated via OmniRoute (' . $model . ')',
+			'error'  => '',
+		);
 	}
 
 	private function fail( $error ) {
@@ -91,12 +113,12 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 	private function nearest_size( $w, $h ) {
 		$ratio = $w / max( 1, $h );
 		if ( $ratio > 1.5 ) {
-			return '1792x1024';
+			return '768x512';
 		}
 		if ( $ratio < 0.6 ) {
-			return '1024x1792';
+			return '512x768';
 		}
-		return '1024x1024';
+		return '512x512';
 	}
 
 	public function list_models() {
@@ -121,17 +143,29 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 		}
 
 		$models = array();
+		$keywords = array( 'flux', 'sdxl', 'image', 'diffusion', 'dall', 'midjourney', 'imagen' );
+
 		foreach ( $response['json']['data'] as $model ) {
-			// Basic heuristic: if it mentions image/flux/sdxl, it's likely an image model.
-			// Or just include everything and let the user decide.
 			$id = $model['id'] ?? '';
 			if ( ! $id ) continue;
 
-			// Filter for image models if possible, but many gateways don't label them clearly.
-			$models[] = array(
-				'id'    => $id,
-				'label' => $model['name'] ?? $id,
-			);
+			// Skip video models
+			if ( str_contains( $id, 'video' ) || str_contains( $id, 'veo' ) ) continue;
+
+			$match = false;
+			foreach ( $keywords as $kw ) {
+				if ( false !== stripos( $id, $kw ) ) {
+					$match = true;
+					break;
+				}
+			}
+
+			if ( $match ) {
+				$models[] = array(
+					'id'    => $id,
+					'label' => $model['name'] ?? $id,
+				);
+			}
 		}
 
 		return $models ?: $this->default_models();
@@ -139,9 +173,10 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 
 	private function default_models() {
 		return array(
-			array( 'id' => 'flux', 'label' => 'FLUX' ),
-			array( 'id' => 'stable-diffusion-xl', 'label' => 'SDXL' ),
-			array( 'id' => 'dall-e-3', 'label' => 'DALL-E 3' ),
+			array( 'id' => 'aihorde/stable_diffusion', 'label' => 'AI Horde Stable Diffusion (Verified Working)' ),
+			array( 'id' => 'aihorde/Flux.1-Schnell fp8 (Compact)', 'label' => 'AI Horde FLUX.1 Schnell' ),
+			array( 'id' => 'aihorde/AlbedoBase XL (SDXL)', 'label' => 'AI Horde AlbedoBase XL' ),
+			array( 'id' => 'aihorde/SDXL 1.0', 'label' => 'AI Horde SDXL 1.0' ),
 		);
 	}
 }

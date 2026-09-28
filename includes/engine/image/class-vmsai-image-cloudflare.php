@@ -28,11 +28,16 @@ class VMSAI_Image_Cloudflare implements VMSAI_Image_Provider {
 	}
 
 	/**
-	 * Configured when a Cloudflare API token exists (the same token powers
-	 * Workers AI; r2_account_id alone — i.e. R2 storage only — is not enough).
+	 * Configured when both the Cloudflare API token AND the account id are
+	 * present. Workers AI's endpoint is /accounts/{account_id}/ai/run/...,
+	 * so the token alone is not enough — without the account id every
+	 * request hits a malformed URL ("/accounts//ai/run/...") and fails.
+	 * The account id is entered once under Storage (r2_account_id) since
+	 * it's the same Cloudflare account id used for R2, Workers AI, Images,
+	 * etc. — not just R2.
 	 */
 	public function is_configured() {
-		return '' !== VMSAI_Settings::credential( 'cf_token' );
+		return '' !== VMSAI_Settings::credential( 'cf_token' ) && '' !== VMSAI_Settings::credential( 'r2_account_id' );
 	}
 
 	/**

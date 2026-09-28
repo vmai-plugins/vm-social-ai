@@ -83,18 +83,21 @@ class VMSAI_Channel_Telegram extends VMSAI_Channel {
 		}
 		$escaped = htmlspecialchars( $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
 		// Pair **open** **close**; an odd trailing ** is dropped.
+		//
+		// After shifting off the leading plain segment, remaining chunks
+		// alternate bold/plain: chunk 0 sits between the 1st and 2nd "**"
+		// (bold), chunk 1 between the 2nd and 3rd (plain), and so on — so
+		// every EVEN-indexed chunk is a complete bold span and every
+		// ODD-indexed one is plain. $count is the number of "**" markers
+		// found; when it's odd the very last chunk was opened by a
+		// marker that never got a matching close, so it must be emitted
+		// as plain text instead of wrapped.
 		$parts = explode( '**', $escaped );
 		$out   = array_shift( $parts );
+		$count = count( $parts );
 		foreach ( $parts as $i => $chunk ) {
-			$out .= ( 0 === $i % 2 ) ? '<b>' . $chunk : $chunk . '</b>';
-		}
-		// Remove a dangling opener left by an odd count.
-		$count = substr_count( $out, '<b>' ) - substr_count( $out, '</b>' );
-		if ( $count > 0 ) {
-			$pos = strrpos( $out, '<b>' );
-			if ( false !== $pos ) {
-				$out = substr_replace( $out, '', $pos, 3 );
-			}
+			$dangling_opener = ( 1 === $count % 2 && $i === $count - 1 );
+			$out .= ( 0 === $i % 2 && ! $dangling_opener ) ? '<b>' . $chunk . '</b>' : $chunk;
 		}
 		if ( $limit > 0 && mb_strlen( $out ) > $limit ) {
 			$out = mb_substr( $out, 0, $limit );

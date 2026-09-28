@@ -421,6 +421,8 @@ if ( $vmsai_streak_weeks > 0 && $vmsai_days_quiet >= 0 && $vmsai_days_quiet <= 7
 
 <script>
 (function($) {
+	var esc = VMSAI.esc;
+
 	$(document).on('click', '[data-vmsai-action="generate-report"]', function() {
 		var $btn = $(this);
 		$btn.text('Analyzing...').prop('disabled', true);
@@ -429,7 +431,12 @@ if ( $vmsai_streak_weeks > 0 && $vmsai_days_quiet >= 0 && $vmsai_days_quiet <= 7
 		VMSAI.api('/reporting/roi', 'GET').then( function(res) {
 			$btn.text('✨ Regenerate').prop('disabled', false);
 			if (res.ok) {
-				var paras = res.report.split("\n\n").map( function(p) { return '<p>' + p + '</p>'; } ).join("");
+				// The report embeds free-text campaign names/titles into its
+				// own generation prompt — escape the completion before
+				// rendering it, the same way a directly-submitted field
+				// would be, rather than trusting the model not to echo
+				// injected markup back.
+				var paras = res.report.split("\n\n").map( function(p) { return '<p>' + esc(p) + '</p>'; } ).join("");
 				$('#vmsai-rep-text').html(paras);
 				$('#vmsai-reporting-content').fadeIn();
 			}

@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.17.0
+Stable tag: 1.17.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,17 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.17.2 =
+* OmniRoute Text Engine: Enforced non-streaming payload ('stream' => false) to prevent cURL 28 timeouts, set default model to auto/best-coding.
+* OmniRoute Image Engine: Configured verified working image model aihorde/stable_diffusion with zero-cost Pollinations fallback; added automatic magic-byte MIME detection and media library sideloading.
+* Video Engine: Corrected OmniRoute generation endpoint URL to /videos/generations, updated candidate models (veo-free/veo, veoaifree-web/veo, veo-free/seedance, auto/inkling), added direct result URL extraction.
+* Model Synchronization: Optimized wp_vmsai_models schema with composite unique key and replace queries for robust high-volume multi-modality catalogue sync.
+* Network Channels & Publishing: Added native carousel & multi-photo publishing for Facebook and Instagram; added TikTok, Bluesky, and Threads optimizations.
+* Admin & Analytics: Rebalancing respects user Quiet Hours; added REST inbox/reply actions for community management.
+
+= 1.17.1 =
+* Patch Gemini v1beta google_search tool schema and add imagen-3.0-generate-002 support.
 
 = 1.17.0 =
 * Fixed: undefined VMSAI_Video_Engine::produce() fatal on video-format posts (TikTok, YouTube, Instagram, Facebook).

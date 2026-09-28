@@ -273,7 +273,14 @@ $vmsai_site    = get_bloginfo( 'name' );
 	}
 
 	function esc(s) {
-		return $('<div>').text(s == null ? '' : String(s)).html();
+		// The div/.text()/.html() trick only escapes &, <, > — it leaves
+		// quote characters untouched, which is fine for element content but
+		// not for the src="..."/class="..." attribute contexts this same
+		// helper is used in below (e.g. line ~322, ~439): an unescaped `"`
+		// in the value can close the attribute early. Escape quotes too.
+		return $('<div>').text(s == null ? '' : String(s)).html()
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
 	}
 
 	function renderTabs() {
@@ -436,7 +443,7 @@ $vmsai_site    = get_bloginfo( 'name' );
 			if (res.ok) {
 				$('#vmsai-compose-media-url').val(res.url);
 				$('#vmsai-compose-media-id').val(res.media_id || 0);
-				$('#vmsai-compose-thumb').html('<img src="' + res.url + '" alt="">');
+				$('#vmsai-compose-thumb').html('<img src="' + esc(res.url) + '" alt="">');
 				$('#vmsai-compose-clearimg').show();
 				refresh();
 			} else {

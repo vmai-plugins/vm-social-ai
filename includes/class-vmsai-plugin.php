@@ -72,8 +72,19 @@ class VMSAI_Plugin {
 	private function __construct() {
 		load_plugin_textdomain( 'vm-social-ai-pro', false, dirname( VMSAI_BASENAME ) . '/languages' );
 
+		// Outside is_admin(): WP-Cron ticks (VMSAI_Scheduler::tick(), model
+		// sync, metrics collection — all registered unconditionally below)
+		// and REST requests run on every page type, not just wp-admin. A
+		// DB_VERSION bump shipped by a background plugin auto-update (WP's
+		// own auto-updater runs via wp-cron.php, never is_admin()) used to
+		// leave the schema stale until an administrator happened to open a
+		// wp-admin page — every cron tick and REST call in between ran new
+		// code against the old schema. maybe_upgrade() already no-ops
+		// cheaply when the version already matches, so running it
+		// unconditionally costs one option read on the common case.
+		VMSAI_Install::maybe_upgrade();
+
 		if ( is_admin() ) {
-			VMSAI_Install::maybe_upgrade();
 			VMSAI_Install::register_recovery();
 			( new VMSAI_Admin() )->register();
 			VMSAI_Github_Updater::instance();

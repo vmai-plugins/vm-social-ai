@@ -118,15 +118,21 @@ abstract class VMSAI_Channel {
 			$parts[] = $cta;
 		}
 
-		// Anything already carried by the first comment must not be repeated
-		// in the caption itself.
+		// Anything already carried by the first comment, or already baked
+		// into the stored body (the composer appends hashtags/CTA there for
+		// the War Room editor's benefit), must not be repeated in the caption.
 		$first_comment = trim( (string) ( $post['first_comment'] ?? '' ) );
+		$body          = (string) $post['body'];
 
-		if ( $include_link && ! empty( $post['link'] ) && false === strpos( $first_comment, (string) $post['link'] ) ) {
+		if ( $include_link && ! empty( $post['link'] )
+			&& false === strpos( $first_comment, (string) $post['link'] )
+			&& false === strpos( $body, (string) $post['link'] ) ) {
 			$parts[] = $post['link'];
 		}
 
-		if ( $include_tags && ! empty( $post['hashtags'] ) && false === strpos( $first_comment, (string) $post['hashtags'] ) ) {
+		if ( $include_tags && ! empty( $post['hashtags'] )
+			&& false === strpos( $first_comment, (string) $post['hashtags'] )
+			&& false === strpos( $body, (string) $post['hashtags'] ) ) {
 			$parts[] = $post['hashtags'];
 		}
 

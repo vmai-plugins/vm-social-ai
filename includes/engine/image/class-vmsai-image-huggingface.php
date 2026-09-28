@@ -13,7 +13,11 @@ defined( 'ABSPATH' ) || exit;
  */
 class VMSAI_Image_HuggingFace implements VMSAI_Image_Provider {
 
-	const API_URL = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell';
+	// Hugging Face decommissioned the legacy api-inference.huggingface.co
+	// Serverless Inference API in late 2025 (requests now 404/410) in favour
+	// of the provider-routed Inference Providers API. hf-inference is HF's
+	// own backend behind that router and keeps the same request shape.
+	const API_URL = 'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell';
 
 	/**
 	 * Provider slug.
@@ -74,7 +78,7 @@ class VMSAI_Image_HuggingFace implements VMSAI_Image_Provider {
 			// Specific handling for DNS resolution issues (cURL error 6)
 			if ( strpos( $err, 'Could not resolve host' ) !== false ) {
 				VMSAI_Logger::error( 'engine.image.huggingface', 'DNS Resolution failed. Check your server\'s internet connection or firewall.', array( 'error' => $err ) );
-				return $this->fail( __( 'Server DNS error: Could not connect to Hugging Face. Your server may be blocking outbound requests to api-inference.huggingface.co.', 'vm-social-ai-pro' ) );
+				return $this->fail( __( 'Server DNS error: Could not connect to Hugging Face (router.huggingface.co). Check your server\'s outbound DNS/firewall.', 'vm-social-ai-pro' ) );
 			}
 
 			// Handle model loading error (sometimes HF returns 503 as error message)

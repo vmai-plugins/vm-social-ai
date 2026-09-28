@@ -27,15 +27,34 @@
 
 	cfg.api = function ( path, method, payload ) {
 		var endpoint = cfg.root.replace( /\/+$/, '' ) + '/' + path.replace( /^\/+/, '' );
+		var verb = ( method || 'GET' ).toUpperCase();
+		var body;
+
+		if ( payload && ( 'GET' === verb || 'HEAD' === verb ) ) {
+			// The Fetch spec forbids a body on GET/HEAD requests — the
+			// browser throws a synchronous TypeError before any promise is
+			// even returned, so a caller's .then()/.catch() never runs.
+			// Encode as a query string instead; WP_REST_Request::get_param()
+			// reads query params for GET requests the same way it reads a
+			// JSON body for POST, so route handlers need no change.
+			var qs = Object.keys( payload ).map( function ( key ) {
+				return encodeURIComponent( key ) + '=' + encodeURIComponent( payload[ key ] );
+			} ).join( '&' );
+			if ( qs ) {
+				endpoint += ( endpoint.indexOf( '?' ) === -1 ? '?' : '&' ) + qs;
+			}
+		} else if ( payload ) {
+			body = JSON.stringify( payload );
+		}
 
 		return fetch( endpoint, {
-			method: method || 'GET',
+			method: verb,
 			credentials: 'same-origin',
 			headers: {
 				'Content-Type': 'application/json',
 				'X-WP-Nonce': cfg.nonce
 			},
-			body: payload ? JSON.stringify( payload ) : undefined
+			body: body
 		} ).then( function ( response ) {
 			if ( ! response.ok ) {
 				return response.text().then( function( text ) {
@@ -210,9 +229,9 @@ jQuery( function ( $ ) {
 				var sentimentClass = result.sentiment === 'positive' ? 'good' : ( result.sentiment === 'negative' ? 'error' : '' );
 				var intentClass = result.intent === 'lead' ? 'score' : '';
 				$tagBox.html(
-					'<span class="vmsai-chip vmsai-chip--' + sentimentClass + '">' + result.sentiment + '</span>' +
-					'<span class="vmsai-chip vmsai-chip--' + intentClass + '">' + result.intent + '</span>' +
-					( result.lead_score ? '<span class="vmsai-chip vmsai-chip--score">🔥 ' + result.lead_score + '</span>' : '' )
+					'<span class="vmsai-chip vmsai-chip--' + sentimentClass + '">' + cfg.esc( result.sentiment ) + '</span>' +
+					'<span class="vmsai-chip vmsai-chip--' + intentClass + '">' + cfg.esc( result.intent ) + '</span>' +
+					( result.lead_score ? '<span class="vmsai-chip vmsai-chip--score">🔥 ' + cfg.esc( result.lead_score ) + '</span>' : '' )
 				);
 			}
 		} ).catch( function ( err ) {
@@ -719,6 +738,42 @@ jQuery( function ( $ ) {
 		$( '#vmsai-planner-modal' ).slideToggle();
 	};
 
+	// The math box promises to update as the target/horizon/per-day/channel
+	// inputs change, but nothing was ever wired up to actually recompute it
+	// — it sat on its initial placeholder text regardless of input.
+	function updateCampaignMath() {
+		var $box = $( '#vmsai-math' );
+		if ( ! $box.length ) return;
+
+		var channels = [];
+		$( '.vmsai-campaign-channel:checked' ).each( function() { channels.push( this.value ); } );
+
+		if ( ! channels.length ) {
+			$box.html( '<p class="vmsai-muted">Pick at least one channel to see what the target requires.</p>' );
+			return;
+		}
+
+		api( '/campaign/math', 'POST', {
+			target_views: parseInt( $( '#vmsai-target' ).val(), 10 ) || 0,
+			horizon_days: parseInt( $( '#vmsai-horizon' ).val(), 10 ) || 0,
+			channels: channels,
+			per_day: parseInt( $( '#vmsai-perday' ).val(), 10 ) || 1
+		} ).then( function ( result ) {
+			if ( ! result.ok ) return;
+			var m = result.math;
+			$box.html(
+				'<p><b>' + cfg.number( m.total_posts ) + '</b> posts over the run, <b>' + cfg.number( m.posts_per_day ) + '</b>/day across your channels.</p>' +
+				'<p>Needs roughly <b>' + cfg.number( m.needed_per_post ) + '</b> views per post to hit the target.</p>' +
+				'<p>Expected baseline reach: <b>' + cfg.number( m.baseline_views ) + '</b> views' +
+					( m.feasible ? ' — <span style="color:var(--green)">on pace to meet the target.</span>' : ' — <span style="color:var(--red)">' + cfg.number( m.gap ) + ' short of the target at this pace.</span>' ) +
+				'</p>'
+			);
+		} );
+	}
+
+	$( document ).on( 'input change', '#vmsai-target, #vmsai-horizon, #vmsai-perday, .vmsai-campaign-channel', updateCampaignMath );
+	if ( $( '#vmsai-campaign-form' ).length ) updateCampaignMath();
+
 	actions[ 'draft-campaign' ] = function ( button ) {
 		var name = $( '#vmsai-cg-name' ).val();
 		var idea = $( '#vmsai-cg-details' ).val();
@@ -778,8 +833,8 @@ jQuery( function ( $ ) {
 				$grid.append( '<div class="vmsai-cg-card is-waiting" id="cg-slot-' + s.id + '">' +
 					'<div class="vmsai-cg-card__media"><span>WAITTING</span></div>' +
 					'<div class="vmsai-cg-card__body">' +
-						'<div class="vmsai-cg-card__angle">' + s.angle + '</div>' +
-						'<div class="vmsai-cg-card__meta">' + s.channel.toUpperCase() + ' • ' + s.date + '</div>' +
+						'<div class="vmsai-cg-card__angle">' + cfg.esc( s.angle ) + '</div>' +
+						'<div class="vmsai-cg-card__meta">' + cfg.esc( s.channel.toUpperCase() ) + ' • ' + cfg.esc( s.date ) + '</div>' +
 						'<div class="vmsai-cg-card__title">Synchronizing...</div>' +
 					'</div></div>' );
 			} );
@@ -794,11 +849,11 @@ jQuery( function ( $ ) {
 					return api( '/campaign-gen/compose', 'POST', { slot_id: s.id } ).then( function( post ) {
 						$card.removeClass( 'is-busy' );
 						if ( post.ok ) {
-							$card.find( '.vmsai-cg-card__media' ).html( '<img src="' + post.media_url + '">' );
+							$card.find( '.vmsai-cg-card__media' ).html( '<img src="' + cfg.esc( post.media_url ) + '">' );
 							$card.find( '.vmsai-cg-card__title' ).text( post.title );
-							$card.append( '<div class="vmsai-cg-card__snippet">' + post.body + '</div>' );
+							$card.append( '<div class="vmsai-cg-card__snippet">' + cfg.esc( post.body ) + '</div>' );
 						} else {
-							$card.addClass( 'is-failed' ).append( '<div class="vmsai-cg-card__error">' + (post.error || 'Failed') + '</div>' );
+							$card.addClass( 'is-failed' ).append( '<div class="vmsai-cg-card__error">' + cfg.esc( post.error || 'Failed' ) + '</div>' );
 						}
 					} );
 				} );
@@ -854,7 +909,7 @@ jQuery( function ( $ ) {
 				var isToday = new Date().toISOString().slice(0,10) === dateStr;
 				var $day = $('<div class="vmsai-cal-day '+(isToday?'is-today':'')+'" data-date="'+dateStr+'"><div class="vmsai-cal-num">'+d+'</div></div>');
 				(res.rows || []).filter(function(r){ return r.slot_date === dateStr; }).forEach(function(s){
-					$day.append('<div class="vmsai-cal-slot is-'+s.status+'" data-id="'+s.id+'">'+s.channel.toUpperCase()+': '+s.topic+'</div>');
+					$day.append('<div class="vmsai-cal-slot is-'+cfg.esc(s.status)+'" data-id="'+cfg.esc(s.id)+'">'+cfg.esc(s.channel.toUpperCase())+': '+cfg.esc(s.topic)+'</div>');
 				});
 				$mount.append($day);
 			}

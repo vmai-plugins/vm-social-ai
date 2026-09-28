@@ -49,7 +49,10 @@ YOUR STANDARDS:
 			. "  \"image_prompt_rewrite\": \"Rewrite the image prompt if it lacks concrete relevancy.\"\n"
 			. "}";
 
-		$result = vmsai()->text_engine()->generate_json( $system, $prompt, array( 'temperature' => 0.2 ) );
+		// usage_type 'audit': this is an internal QA pass on a post that
+		// already counted as one generation, not a separate one the user
+		// asked for — without this it silently ate into the daily quota.
+		$result = vmsai()->text_engine()->generate_json( $system, $prompt, array( 'temperature' => 0.2, 'usage_type' => 'audit' ) );
 
 		if ( empty( $result['ok'] ) ) {
 			return array( 'score' => 85, 'notes' => '', 'rewrite' => '', 'image_prompt_rewrite' => '' );

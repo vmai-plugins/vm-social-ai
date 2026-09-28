@@ -180,8 +180,16 @@ class VMSAI_Github_Updater {
 			}
 		}
 
-		// 2. Second attempt: Check raw plugin header from master branch if no release tag found or if checking master
-		if ( empty( $latest_version ) ) {
+		// 2. Second attempt: an unsigned read of the raw plugin header
+		// straight off the mutable `master` branch. Unlike a Release (which
+		// requires the repo owner to take an explicit "publish" action),
+		// anyone who can push to master — or a compromised maintainer
+		// account/PAT — could get every site running this plugin to offer,
+		// and one-click install, whatever currently sits on that branch.
+		// Off by default; only probed when the operator explicitly opts in.
+		$allow_unstable = (bool) VMSAI_Settings::get( 'github_allow_unstable_updates', false );
+
+		if ( empty( $latest_version ) && $allow_unstable ) {
 			$raw_file_url = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/' . self::GITHUB_BRANCH . '/vm-social-ai.php';
 			$raw_res      = wp_remote_get( $raw_file_url, array( 'headers' => $headers, 'timeout' => 15 ) );
 
@@ -189,13 +197,15 @@ class VMSAI_Github_Updater {
 				$file_contents = wp_remote_retrieve_body( $raw_res );
 				if ( preg_match( '/^[ \t\/*#@]*Version:\s*(.+)$/m', $file_contents, $matches ) ) {
 					$latest_version = trim( $matches[1] );
-					$release_notes  = "Latest updates directly from GitHub master branch.";
+					$release_notes  = "Latest updates directly from GitHub master branch (unstable channel).";
 				}
 			}
 		}
 
-		// Fallback download URL points directly to master archive
-		if ( empty( $download_url ) ) {
+		// Fallback download URL points directly to master archive — only
+		// reachable when the unstable-channel probe above actually set
+		// $latest_version, i.e. only when the operator opted in.
+		if ( empty( $download_url ) && $allow_unstable && $latest_version ) {
 			$download_url = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/' . self::GITHUB_BRANCH . '.zip';
 		}
 
@@ -230,6 +240,27 @@ class VMSAI_Github_Updater {
 		set_transient( self::TRANSIENT_KEY, $info, self::CACHE_TTL );
 
 		return $info;
+	}
+
+	/**
+	 * Whether a download URL actually points at a real GitHub asset host.
+	 * There is no checksum/signature to verify the package contents
+	 * against (GitHub doesn't publish one for this repo), so this is the
+	 * available defense in depth: refuse to download and install from any
+	 * URL that isn't actually GitHub's, even if it came back inside an
+	 * otherwise well-formed API response (a compromised/MITM'd response
+	 * pointing the package field somewhere else).
+	 *
+	 * @param string $url Candidate download URL.
+	 * @return bool
+	 */
+	private static function is_trusted_download_host( $url ) {
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		if ( ! $host || 'https' !== strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
+			return false;
+		}
+		$allowed = array( 'github.com', 'codeload.github.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com' );
+		return in_array( $host, $allowed, true );
 	}
 
 	/**
@@ -387,6 +418,13 @@ class VMSAI_Github_Updater {
 			);
 		}
 
+		if ( ! self::is_trusted_download_host( $download_url ) ) {
+			return array(
+				'ok'      => false,
+				'message' => __( 'Refusing to install: the update package URL does not point to a recognized GitHub host.', 'vm-social-ai-pro' ),
+			);
+		}
+
 		// Initialize WP Filesystem
 		global $wp_filesystem;
 		if ( ! WP_Filesystem() ) {
@@ -400,8 +438,14 @@ class VMSAI_Github_Updater {
 		$skin = new Automatic_Upgrader_Skin();
 		$upgrader = new Plugin_Upgrader( $skin );
 
-		// Set transient for the upgrade run
-		$this->inject_update_transient( get_site_transient( 'update_plugins' ) );
+		// Set transient for the upgrade run. The return value must actually
+		// be persisted — inject_update_transient() mutates the in-memory
+		// object it's given but that's never written back to the DB on its
+		// own, so Plugin_Upgrader::upgrade() below (which re-reads the
+		// transient from the DB, not this in-memory copy) previously found
+		// no entry for this plugin and silently fell through to
+		// fallback_manual_update() on every single "Update Now" click.
+		set_site_transient( 'update_plugins', $this->inject_update_transient( get_site_transient( 'update_plugins' ) ) );
 
 		// Perform upgrade using Plugin_Upgrader
 		$result = $upgrader->upgrade( VMSAI_BASENAME, array(
@@ -448,6 +492,16 @@ class VMSAI_Github_Updater {
 	 */
 	private function fallback_manual_update( $download_url ) {
 		global $wp_filesystem;
+
+		// Defense in depth: this is the routine that actually downloads and
+		// copies files into the live plugin directory, so it re-checks the
+		// host itself rather than only trusting its caller to have done so.
+		if ( ! self::is_trusted_download_host( $download_url ) ) {
+			return array(
+				'ok'      => false,
+				'message' => __( 'Refusing to install: the update package URL does not point to a recognized GitHub host.', 'vm-social-ai-pro' ),
+			);
+		}
 
 		$token = VMSAI_Settings::credential( 'github_token' );
 		$args  = array(

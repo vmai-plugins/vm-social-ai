@@ -126,7 +126,7 @@ class VMSAI_Model_Sync {
 				continue;
 			}
 
-			$wpdb->insert( // phpcs:ignore
+			$wpdb->replace( // phpcs:ignore
 				$table,
 				array(
 					'provider'       => $provider,

@@ -47,7 +47,41 @@ class VMSAI_Image_Aipuffer implements VMSAI_Image_Provider {
 		// execute, and image generation fell through to weaker providers even
 		// though a working multi-model backend was sitting right here. The
 		// text provider has always detected this; the image one did not.
-		return '' !== self::local_key();
+		//
+		// This must use the exact same "is local" test create() uses (see
+		// is_local() below) — they used to disagree (this checked nothing,
+		// create() used a raw strpos(home_url(), $site) substring match), so
+		// a saved aipuffer_site with a trailing slash or different scheme
+		// could report "configured" here while create() decided it wasn't
+		// local and sent an empty Authorization header on every request.
+		return self::is_local() && '' !== self::local_key();
+	}
+
+	/**
+	 * Whether the configured AI Puffer site (if any) is this same
+	 * install, compared by host rather than a raw substring so a trailing
+	 * slash, scheme, or www. mismatch can't produce a false negative.
+	 *
+	 * @return bool
+	 */
+	private static function is_local() {
+		$site = trim( (string) VMSAI_Settings::credential( 'aipuffer_site' ) );
+		if ( '' === $site ) {
+			return true;
+		}
+
+		$site_host = wp_parse_url( $site, PHP_URL_HOST );
+		if ( ! $site_host ) {
+			$site_host = preg_replace( '/^https?:\/\//i', '', $site );
+			$site_host = strtok( $site_host, '/' );
+		}
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+		if ( ! $site_host || ! $home_host ) {
+			return false;
+		}
+
+		return strtolower( trim( (string) $site_host ) ) === strtolower( trim( (string) $home_host ) );
 	}
 
 	/**
@@ -78,7 +112,7 @@ class VMSAI_Image_Aipuffer implements VMSAI_Image_Provider {
 	 */
 	public function create( $prompt, array $args = array() ) {
 		$site = VMSAI_Settings::credential( 'aipuffer_site' );
-		$is_local = ( ! $site || strpos( home_url(), (string) $site ) !== false );
+		$is_local = self::is_local();
 		$site = $site ? untrailingslashit( $site ) : untrailingslashit( home_url() );
 		$key  = VMSAI_Settings::credential( 'aipuffer_key' );
 
@@ -225,7 +259,7 @@ class VMSAI_Image_Aipuffer implements VMSAI_Image_Provider {
 		$models = array();
 
 		// LOCAL SYNC: If on same site, try to reach into the backend classes directly.
-		if ( ( ! VMSAI_Settings::credential( 'aipuffer_site' ) || strpos( home_url(), VMSAI_Settings::credential( 'aipuffer_site' ) ) !== false ) ) {
+		if ( self::is_local() ) {
 			if ( class_exists( '\WPAICG\AIPKit_Providers' ) ) {
 				$types = array( 'OpenAI', 'GoogleImage', 'xAIImage' );
 				foreach ( $types as $t ) {

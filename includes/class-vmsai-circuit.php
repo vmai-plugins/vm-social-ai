@@ -44,9 +44,22 @@ class VMSAI_Circuit {
 	 * @return void
 	 */
 	public static function success( $provider ) {
-		$state              = self::state();
+		$state = self::state();
+		$entry = $state[ $provider ] ?? array( 'failures' => 0, 'tripped_at' => 0 );
+
+		// Decay rather than a hard reset to 0: a provider that only
+		// succeeds ~1 in 5 calls (an 80% real failure rate) had its
+		// failure count wiped on every lucky call and could run
+		// indefinitely without ever reaching the trip threshold. Halving
+		// still lets a genuinely-recovered provider clear quickly, but a
+		// flapping one keeps accumulating toward the threshold over time.
+		// An active trip clears fully — this only happens when something
+		// (e.g. a manual "Test" in Engines, which bypasses the breaker on
+		// purpose) demonstrates the provider actually works right now.
+		$failures = ! empty( $entry['tripped_at'] ) ? 0 : (float) ( $entry['failures'] ?? 0 ) / 2;
+
 		$state[ $provider ] = array(
-			'failures'   => 0,
+			'failures'   => $failures,
 			'tripped_at' => 0,
 			'last_ok'    => time(),
 			'last_error' => '',

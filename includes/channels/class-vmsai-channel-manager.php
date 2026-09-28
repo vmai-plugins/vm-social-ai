@@ -45,8 +45,19 @@ class VMSAI_Channel_Manager {
 		$registry = apply_filters( 'vmsai_channels', $registry );
 
 		foreach ( $registry as $slug => $class ) {
-			if ( class_exists( $class ) ) {
+			if ( ! class_exists( $class ) ) {
+				continue;
+			}
+
+			// One misbehaving channel (built-in or added via the
+			// vmsai_channels filter) must not take every other channel
+			// down with it — without this, a throw/fatal in any single
+			// constructor aborted the whole loop, breaking publishing and
+			// the Inbox for channels that were working fine.
+			try {
 				$this->channels[ $slug ] = new $class();
+			} catch ( Throwable $e ) {
+				VMSAI_Logger::error( 'channel.manager', "Failed to load channel '{$slug}': " . $e->getMessage() );
 			}
 		}
 	}

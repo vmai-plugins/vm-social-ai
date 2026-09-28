@@ -125,16 +125,26 @@ class VMSAI_Analytics {
 		$queue   = VMSAI_Install::table( 'queue' );
 		$plan    = VMSAI_Install::table( 'plan' );
 
+		// Peak-then-average, never average-of-snapshots: the metrics table
+		// stores one cumulative row per post per day, so collapse to each
+		// post's single peak value first (inner query), then average those
+		// peaks per pillar — otherwise a long-lived post's many growing
+		// snapshots drag its pillar's average down relative to a
+		// freshly-published post with only one or two snapshots.
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT p.pillar, AVG(m.engagements) as avg_eng
-			 FROM `$queue` q
-			 INNER JOIN `$metrics` m ON m.queue_id = q.id
-			 LEFT JOIN `$plan` p ON p.id = q.plan_id
-			 WHERE q.status = 'published'
-			 AND q.published_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL %d DAY)
-			 AND p.pillar IS NOT NULL
-			 GROUP BY p.pillar
-			 ORDER BY avg_eng DESC",
+			"SELECT t.pillar, AVG(t.peak_eng) as avg_eng
+			 FROM (
+				SELECT p.pillar AS pillar, MAX(m.engagements) AS peak_eng
+				FROM `$queue` q
+				INNER JOIN `$metrics` m ON m.queue_id = q.id
+				LEFT JOIN `$plan` p ON p.id = q.plan_id
+				WHERE q.status = 'published'
+				AND q.published_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL %d DAY)
+				AND p.pillar IS NOT NULL
+				GROUP BY q.id, p.pillar
+			 ) t
+			 GROUP BY t.pillar
+			 ORDER BY avg_eng DESC", // phpcs:ignore
 			(int) $days
 		), ARRAY_A );
 
@@ -200,12 +210,24 @@ class VMSAI_Analytics {
 		$quiet    = (array) VMSAI_Settings::get( 'quiet_hours', array( '01:00', '06:00' ) );
 
 		foreach ( $enabled as $channel ) {
+			// UTC — this is what actually gets written to scheduled_at
+			// below (a UTC column), so it must stay UTC on the happy path.
 			$best_hour = self::get_optimal_hour( $channel );
+
+			// quiet_hours is a site-LOCAL setting (VMSAI_Scheduler::
+			// is_quiet_hours() reads it against current_time('Hi')), so the
+			// comparison has to use the local equivalent of the UTC optimal
+			// hour — comparing the raw UTC hour against it (as this used to
+			// do) could both wrongly flag a fine UTC hour as "quiet" and
+			// fail to catch an hour that really does fall in local quiet
+			// time.
+			$site_tz         = wp_timezone();
+			$best_hour_local = self::utc_hour_to_timezone( $best_hour, $site_tz );
 
 			// SAFETY: If optimal hour is in quiet window, move it to 1 hour after quiet window ends.
 			$q_start = (int) str_replace( ':', '', $quiet[0] ?? '01:00' );
 			$q_end   = (int) str_replace( ':', '', $quiet[1] ?? '06:00' );
-			$target_time = $best_hour * 100;
+			$target_time = $best_hour_local * 100;
 
 			$is_quiet = false;
 			if ( $q_start > $q_end ) {
@@ -215,7 +237,18 @@ class VMSAI_Analytics {
 			}
 
 			if ( $is_quiet ) {
-				$best_hour = ( intval(substr($quiet[1], 0, 2)) + 1 ) % 24;
+				// Computed in local time (matching quiet_hours), then
+				// converted back to UTC since $best_hour must stay UTC for
+				// the scheduled_at write below.
+				$fallback_local_hour = ( intval( substr( $quiet[1], 0, 2 ) ) + 1 ) % 24;
+				try {
+					$dt = new DateTime( 'now', $site_tz );
+					$dt->setTime( $fallback_local_hour, 0, 0 );
+					$dt->setTimezone( new DateTimeZone( 'UTC' ) );
+					$best_hour = (int) $dt->format( 'G' );
+				} catch ( Exception $e ) {
+					$best_hour = $fallback_local_hour;
+				}
 			}
 
 			// Move posts scheduled in the next 7 days.
@@ -425,6 +458,61 @@ class VMSAI_Analytics {
 	}
 
 	/**
+	 * get_optimal_hour() above is explicitly documented as UTC (it's
+	 * computed from HOUR(q.published_at), and published_at is written via
+	 * current_time('mysql', true) i.e. UTC). Every caller that stores it
+	 * as a plan slot_time was instead treating it as already-local
+	 * wall-clock time, which VMSAI_Composer::slot_timestamp() then
+	 * converts to UTC a *second* time — silently drifting every
+	 * "optimally timed" post by the site/target timezone offset. Use
+	 * this to convert the UTC hour to the timezone slot_timestamp()
+	 * actually resolves slot_time against before storing it.
+	 *
+	 * @param string $channel Channel slug.
+	 * @return int 0-23, local wall-clock hour.
+	 */
+	public static function get_optimal_local_hour( $channel ) {
+		return self::utc_hour_to_timezone( self::get_optimal_hour( $channel ), self::scheduling_timezone() );
+	}
+
+	/**
+	 * The timezone VMSAI_Composer::slot_timestamp() resolves slot_date /
+	 * slot_time against: the business's target_timezone if one is set and
+	 * valid, else the site's own configured timezone.
+	 *
+	 * @return DateTimeZone
+	 */
+	private static function scheduling_timezone() {
+		$target_tz = VMSAI_Brain::get( 'target_timezone' );
+		if ( $target_tz && in_array( $target_tz, timezone_identifiers_list(), true ) ) {
+			try {
+				return new DateTimeZone( $target_tz );
+			} catch ( Exception $e ) {
+				// Fall through to the site timezone.
+			}
+		}
+		return wp_timezone();
+	}
+
+	/**
+	 * Convert an hour-of-day in UTC to the equivalent hour-of-day in $tz.
+	 *
+	 * @param int          $utc_hour 0-23.
+	 * @param DateTimeZone $tz       Target timezone.
+	 * @return int 0-23.
+	 */
+	private static function utc_hour_to_timezone( $utc_hour, DateTimeZone $tz ) {
+		try {
+			$dt = new DateTime( 'now', new DateTimeZone( 'UTC' ) );
+			$dt->setTime( (int) $utc_hour, 0, 0 );
+			$dt->setTimezone( $tz );
+			return (int) $dt->format( 'G' );
+		} catch ( Exception $e ) {
+			return (int) $utc_hour;
+		}
+	}
+
+	/**
 	 * Determine which variant is winning on a specific platform.
 	 * Returns 'a', 'b', or 'balanced'.
 	 */
@@ -433,23 +521,49 @@ class VMSAI_Analytics {
 		$metrics = VMSAI_Install::table( 'metrics' );
 		$queue   = VMSAI_Install::table( 'queue' );
 
-		$stats = $wpdb->get_row( $wpdb->prepare(
-			"SELECT
-				SUM(CASE WHEN q.variant = 'a' THEN m.engagements ELSE 0 END) as eng_a,
-				SUM(CASE WHEN q.variant = 'b' THEN m.engagements ELSE 0 END) as eng_b
-			 FROM `$queue` q INNER JOIN `$metrics` m ON q.id = m.queue_id
-			 WHERE q.channel = %s AND q.status = 'published' AND q.published_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)",
+		// Peak-then-average per variant, not a raw sum of cumulative
+		// snapshots: the inner query collapses each post to its single
+		// peak engagement value, so a variant with more posts (or
+		// longer-tracked posts) can no longer "win" purely on volume.
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT t.variant, AVG(t.peak_eng) AS avg_eng, COUNT(*) AS n
+			 FROM (
+				SELECT q.id, q.variant AS variant, MAX(m.engagements) AS peak_eng
+				FROM `$queue` q
+				INNER JOIN `$metrics` m ON q.id = m.queue_id
+				WHERE q.channel = %s AND q.status = 'published' AND q.published_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)
+				GROUP BY q.id
+			 ) t
+			 WHERE t.variant IN ('a','b')
+			 GROUP BY t.variant", // phpcs:ignore
 			$channel
-		) );
+		), ARRAY_A );
 
-		if ( ! $stats || ( $stats->eng_a == 0 && $stats->eng_b == 0 ) ) {
+		$avg = array( 'a' => 0.0, 'b' => 0.0 );
+		$n   = array( 'a' => 0, 'b' => 0 );
+		foreach ( (array) $rows as $row ) {
+			if ( isset( $avg[ $row['variant'] ] ) ) {
+				$avg[ $row['variant'] ] = (float) $row['avg_eng'];
+				$n[ $row['variant'] ]   = (int) $row['n'];
+			}
+		}
+
+		// Require at least 2 published posts on each side — otherwise a
+		// single lucky/unlucky post could flip the "winner" on noise
+		// alone, and averaging a sample of 1 defeats the point of fixing
+		// the volume bias above.
+		if ( $n['a'] < 2 || $n['b'] < 2 ) {
 			return 'balanced';
 		}
 
-		if ( $stats->eng_b > ( $stats->eng_a * 1.2 ) ) {
+		if ( 0.0 === $avg['a'] && 0.0 === $avg['b'] ) {
+			return 'balanced';
+		}
+
+		if ( $avg['b'] > ( $avg['a'] * 1.2 ) ) {
 			return 'b'; // 20% lead for B.
 		}
-		if ( $stats->eng_a > ( $stats->eng_b * 1.2 ) ) {
+		if ( $avg['a'] > ( $avg['b'] * 1.2 ) ) {
 			return 'a'; // 20% lead for A.
 		}
 

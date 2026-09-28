@@ -292,7 +292,7 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 
 		if ( ! $response['ok'] ) return $this->fail( $response['error'] );
 
-		$id = $response['json']['id'];
+		$id = (string) ( $response['json']['id'] ?? '' );
 
 		// Mark children as published
 		global $wpdb;

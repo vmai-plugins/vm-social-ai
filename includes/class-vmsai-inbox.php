@@ -154,11 +154,19 @@ class VMSAI_Inbox {
 			return array( 'ok' => false, 'message' => $result['error'] );
 		}
 
+		// The prompt above asks for sentiment/intent from a fixed enum, but
+		// the comment text feeding this prompt is genuinely external and
+		// unauthenticated (a public Facebook/Instagram/GBP comment) — treat
+		// the model's answer as untrusted and whitelist it rather than
+		// passing whatever it returned straight through to the admin UI.
+		$sentiment = (string) ( $result['data']['sentiment'] ?? 'neutral' );
+		$intent    = (string) ( $result['data']['intent'] ?? 'question' );
+
 		return array(
 			'ok'        => true,
 			'reply'     => $result['data']['reply'] ?? '',
-			'sentiment' => $result['data']['sentiment'] ?? 'neutral',
-			'intent'    => $result['data']['intent'] ?? 'question',
+			'sentiment' => in_array( $sentiment, array( 'positive', 'negative', 'neutral' ), true ) ? $sentiment : 'neutral',
+			'intent'    => in_array( $intent, array( 'question', 'complaint', 'praise', 'lead' ), true ) ? $intent : 'question',
 			'lead_score' => (int) ($result['data']['lead_score'] ?? 0),
 		);
 	}

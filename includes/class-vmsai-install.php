@@ -407,10 +407,6 @@ class VMSAI_Install {
 			'interval' => 300,
 			'display'  => __( 'Every 5 Minutes (Social AI)', 'vm-social-ai-pro' ),
 		);
-		$schedules['weekly'] = array(
-			'interval' => 604800,
-			'display'  => __( 'Once Weekly', 'vm-social-ai-pro' ),
-		);
 		return $schedules;
 	}
 }

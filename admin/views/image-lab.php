@@ -107,9 +107,9 @@ $vmsai_agents = VMSAI_Agents::registry();
 			$btn.prop('disabled', false);
 
 			if (res.ok) {
-				$output.html('<img src="' + res.url + '" style="width:100%; height:100%; object-fit:contain;">');
+				$output.html('<img src="' + VMSAI.esc(res.url) + '" style="width:100%; height:100%; object-fit:contain;">');
 			} else {
-				$output.html('<div style="color:var(--red); padding:40px;">Experiment Failed: ' + res.error + '</div>');
+				$output.html('<div style="color:var(--red); padding:40px;">Experiment Failed: ' + VMSAI.esc(res.error) + '</div>');
 			}
 		}).catch( function(err) {
 			$loader.hide();
