@@ -174,7 +174,9 @@ class VMSAI_Github_Updater {
 					}
 				}
 
-				if ( empty( $download_url ) && ! empty( $body['zipball_url'] ) ) {
+				if ( empty( $download_url ) && ! empty( $body['tag_name'] ) ) {
+					$download_url = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/tags/' . $body['tag_name'] . '.zip';
+				} elseif ( empty( $download_url ) && ! empty( $body['zipball_url'] ) ) {
 					$download_url = $body['zipball_url'];
 				}
 			}
@@ -259,8 +261,20 @@ class VMSAI_Github_Updater {
 		if ( ! $host || 'https' !== strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
 			return false;
 		}
-		$allowed = array( 'github.com', 'codeload.github.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com' );
-		return in_array( $host, $allowed, true );
+		$allowed = array(
+			'github.com',
+			'api.github.com',
+			'codeload.github.com',
+			'objects.githubusercontent.com',
+			'raw.githubusercontent.com',
+		);
+		if ( in_array( $host, $allowed, true ) ) {
+			return true;
+		}
+		if ( preg_match( '/\.(github\.com|githubusercontent\.com)$/', $host ) ) {
+			return true;
+		}
+		return false;
 	}
 
 	/**
