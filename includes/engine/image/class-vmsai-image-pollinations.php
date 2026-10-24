@@ -100,9 +100,11 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			'scope'   => 'engine.image.pollinations',
 		) );
 
+		$binary = $response['body'] ?? '';
+
 		// Resilient Fallback: If primary model encounters an issue, fallback directly to 'sana'
-		if ( ( ! $response['ok'] || strlen( (string) $response['body'] ) < 3000 ) && 'sana' !== $model ) {
-			VMSAI_Logger::warn( 'engine.image.pollinations', sprintf( 'Model %s failed, retrying with robust sana.', $model ), array( 'error' => $response['error'] ?? '' ) );
+		if ( strlen( $binary ) < 3000 && 'sana' !== $model ) {
+			VMSAI_Logger::warn( 'engine.image.pollinations', sprintf( 'Model %s returned empty payload, retrying with sana.', $model ), array( 'error' => $response['error'] ?? '' ) );
 			$query['model'] = 'sana';
 			$url            = self::BASE . rawurlencode( $clean_prompt ) . '?' . http_build_query( $query );
 			$response       = VMSAI_Http::get( $url, array(
@@ -110,16 +112,13 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 				'timeout' => 120,
 				'scope'   => 'engine.image.pollinations',
 			) );
+			$binary = $response['body'] ?? '';
 		}
 
-		if ( ! $response['ok'] ) {
-			return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => $response['error'] );
-		}
-
-		$binary = $response['body'];
-
-		// Robustness: Verify this is actually an image and not a JSON error masquerading as 200 OK.
-		// JPEGs start with FF D8 FF. PNGs start with 89 50 4E 47.
+		// Robustness & Soft-402 Resilience:
+		// Pollinations occasionally returns an HTTP 402 header as a payment nag even while
+		// successfully transmitting the entire generated JPEG binary in the body.
+		// If binary starts with valid JPEG (FF D8 FF) or PNG (89 50 4E 47), accept it as valid!
 		$is_image = false;
 		$mime     = 'image/jpeg';
 		if ( strlen( $binary ) > 10 ) {
@@ -134,6 +133,9 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 		}
 
 		if ( ! $is_image || strlen( $binary ) < 3000 ) {
+			if ( ! empty( $response['error'] ) ) {
+				return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => $response['error'] );
+			}
 			VMSAI_Logger::error( 'engine.image.pollinations', 'Pollinations returned invalid binary.', array( 'size' => strlen( $binary ), 'preview' => substr( $binary, 0, 100 ) ) );
 			return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => __( 'Pollinations returned an empty or invalid payload.', 'vm-social-ai-pro' ) );
 		}
