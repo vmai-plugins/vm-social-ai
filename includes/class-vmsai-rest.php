@@ -159,6 +159,10 @@ class VMSAI_Rest {
 			'agents/styles'        => array( 'GET', 'agents_styles' ),
 			'system/check-update'  => array( 'POST', 'check_update' ),
 			'system/github-update' => array( 'POST', 'github_update' ),
+			'vision/analyze'       => array( 'POST', 'vision_analyze' ),
+			'vision/hooks'         => array( 'POST', 'vision_hooks' ),
+			'isolator/backdrop'    => array( 'POST', 'isolator_backdrop' ),
+			'isolator/presets'     => array( 'GET', 'isolator_presets' ),
 		);
 
 		foreach ( $routes as $path => $config ) {
@@ -1755,5 +1759,42 @@ class VMSAI_Rest {
 			$result,
 			! empty( $result['ok'] ) ? 200 : 400
 		);
+	}
+
+	/**
+	 * Multimodal Vision Analysis (Imported from VM Image AI).
+	 */
+	public function vision_analyze( WP_REST_Request $request ) {
+		$image = $request->get_param( 'image' );
+		$hint  = sanitize_text_field( (string) $request->get_param( 'hint' ) );
+		$desc  = VMSAI_Vision::describe( $image, $hint );
+		return new WP_REST_Response( array( 'ok' => ! empty( $desc ), 'description' => $desc ), 200 );
+	}
+
+	/**
+	 * Generate 3 viral hooks and hashtags from an image.
+	 */
+	public function vision_hooks( WP_REST_Request $request ) {
+		$image   = $request->get_param( 'image' );
+		$channel = sanitize_key( (string) ( $request->get_param( 'channel' ) ?: 'instagram' ) );
+		$res     = VMSAI_Vision::generate_social_hooks( $image, $channel );
+		return new WP_REST_Response( $res, 200 );
+	}
+
+	/**
+	 * Commercial Studio Scene & Podium Compositor.
+	 */
+	public function isolator_backdrop( WP_REST_Request $request ) {
+		$preset  = sanitize_key( (string) ( $request->get_param( 'preset' ) ?: 'marble_gold' ) );
+		$channel = sanitize_key( (string) ( $request->get_param( 'channel' ) ?: 'instagram' ) );
+		$res     = VMSAI_Isolator::generate_backdrop( $preset, $channel );
+		return new WP_REST_Response( $res, 200 );
+	}
+
+	/**
+	 * List studio backdrop presets.
+	 */
+	public function isolator_presets() {
+		return new WP_REST_Response( array( 'ok' => true, 'presets' => VMSAI_Isolator::get_backdrop_presets() ), 200 );
 	}
 }
