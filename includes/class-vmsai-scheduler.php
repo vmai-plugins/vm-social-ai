@@ -32,6 +32,7 @@ class VMSAI_Scheduler {
 		add_action( VMSAI_Install::CRON_INBOX, array( $this, 'sync_inbox' ) );
 		add_action( VMSAI_Install::CRON_CLEANUP, array( $this, 'cleanup_assets' ) );
 		add_action( VMSAI_Install::CRON_PLANNER, array( 'VMSAI_Agent_Feed', 'top_up' ) );
+		add_action( VMSAI_Image_Optimizer::CRON_HOOK, array( 'VMSAI_Image_Optimizer', 'process_batch' ) );
 	}
 
 	/**

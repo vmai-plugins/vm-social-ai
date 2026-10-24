@@ -1012,4 +1012,98 @@ jQuery( function ( $ ) {
 			toast( err.message || 'Update failed.', true );
 		} );
 	};
+
+	// ---------------------------------------------------------
+	// Site Image Studio & Autonomous Optimizer
+	// ---------------------------------------------------------
+	$( document ).on( 'click', '.vmsai-opt-tab-btn', function () {
+		var tab = $( this ).data( 'tab' );
+		$( '.vmsai-opt-tab-btn' ).removeClass( 'is-active' );
+		$( this ).addClass( 'is-active' );
+		$( '.vmsai-opt-view-pane' ).hide();
+		$( '#vmsai-opt-tab-' + tab ).fadeIn( 150 );
+	} );
+
+	// Rescan media
+	$( document ).on( 'click', '#vmsai-opt-refresh-btn', function () {
+		var $btn = $( this );
+		$btn.prop( 'disabled', true ).find( 'span' ).text( '⏳' );
+		api( '/optimizer/scan', 'GET', { force: 1 } ).then( function ( res ) {
+			$btn.prop( 'disabled', false ).find( 'span' ).text( '🔄' );
+			if ( res.ok && res.summary ) {
+				$( '#vmsai-metric-orphans' ).text( cfg.number( res.summary.orphan_attachments ) );
+				$( '#vmsai-metric-lowres' ).text( cfg.number( res.summary.low_res_count ) );
+				$( '#vmsai-metric-heavy' ).text( cfg.number( res.summary.heavy_count ) );
+				$( '#vmsai-metric-queue' ).text( cfg.number( res.summary.queue_count ) );
+				toast( 'Site media scan refreshed!' );
+			}
+		} ).catch( function ( err ) {
+			$btn.prop( 'disabled', false ).find( 'span' ).text( '🔄' );
+			toast( err.message || 'Rescan failed.', true );
+		} );
+	} );
+
+	// Regenerate single image with AI
+	$( document ).on( 'click', '.vmsai-opt-regen-single-btn', function () {
+		var $btn = $( this );
+		var postId = $btn.data( 'id' );
+		var postTitle = $btn.data( 'title' );
+
+		if ( ! confirm( 'Regenerate high-definition 8K photography for "' + postTitle + '" and auto-assign as featured image?' ) ) {
+			return;
+		}
+
+		$btn.prop( 'disabled', true ).text( '✨ Generating…' );
+		api( '/optimizer/regenerate', 'POST', { post_id: postId } ).then( function ( res ) {
+			$btn.prop( 'disabled', false ).text( '✓ Replaced!' ).css( 'color', '#10b981' );
+			toast( 'High-definition image generated and set for Post #' + postId + '!' );
+			var $row = $( '#vmsai-row-' + postId );
+			if ( $row.length && res.url ) {
+				$row.find( 'td:first' ).html( '<img src="' + cfg.esc( res.url ) + '" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid #10b981;" />' );
+				$row.find( 'td:nth-child(4)' ).html( '<span style="color:#10b981;font-weight:700;">8K WebP</span>' );
+			}
+		} ).catch( function ( err ) {
+			$btn.prop( 'disabled', false ).text( '⚡ Regenerate' );
+			toast( err.message || 'Regeneration failed.', true );
+		} );
+	} );
+
+	// Queue all for background generation
+	$( document ).on( 'click', '#vmsai-opt-queue-all-btn', function () {
+		var $btn = $( this );
+		if ( ! confirm( 'Queue all detected low-resolution posts for autonomous background regeneration?' ) ) {
+			return;
+		}
+
+		$btn.prop( 'disabled', true ).text( '⏳ Queueing…' );
+		api( '/optimizer/queue', 'POST', {} ).then( function ( res ) {
+			$btn.prop( 'disabled', false ).text( '✓ Queued in Background' );
+			$( '#vmsai-metric-queue' ).text( cfg.number( res.queued ) );
+			toast( res.queued + ' posts successfully queued for background auto-generation!' );
+		} ).catch( function ( err ) {
+			$btn.prop( 'disabled', false ).text( '⚡ Queue All for Background Auto-Regen' );
+			toast( err.message || 'Queue failed.', true );
+		} );
+	} );
+
+	// Move orphan to safe quarantine
+	$( document ).on( 'click', '.vmsai-opt-quarantine-btn', function () {
+		var $btn = $( this );
+		var attId = $btn.data( 'id' );
+
+		if ( ! confirm( 'Move this unused attachment to safe quarantine? (It will be preserved in a protected staging folder and can be restored anytime with 1 click).' ) ) {
+			return;
+		}
+
+		$btn.prop( 'disabled', true ).text( '📦 Moving…' );
+		api( '/optimizer/quarantine', 'POST', { attachment_id: attId } ).then( function ( res ) {
+			toast( 'Moved to safe quarantine!' );
+			$( '#vmsai-orphan-' + attId ).fadeOut( 250, function () { $( this ).remove(); } );
+			var count = parseInt( $( '#vmsai-metric-orphans' ).text().replace( /,/g, '' ), 10 );
+			if ( count > 0 ) $( '#vmsai-metric-orphans' ).text( cfg.number( count - 1 ) );
+		} ).catch( function ( err ) {
+			$btn.prop( 'disabled', false ).text( '📦 Quarantine' );
+			toast( err.message || 'Quarantine failed.', true );
+		} );
+	} );
 } );

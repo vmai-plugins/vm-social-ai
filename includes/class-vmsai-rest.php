@@ -69,6 +69,7 @@ class VMSAI_Rest {
 		if ( strpos($route, '/commander/') !== false ) return current_user_can( 'vmsai_edit' );
 		if ( strpos($route, '/cache/') !== false ) return current_user_can( 'vmsai_edit' );
 		if ( strpos($route, '/lab/') !== false ) return current_user_can( 'vmsai_edit' );
+		if ( strpos($route, '/optimizer/') !== false ) return current_user_can( 'vmsai_edit' ) || current_user_can( 'manage_options' );
 		if ( strpos($route, '/storage/') !== false ) return current_user_can( 'vmsai_edit' );
 		if ( strpos($route, '/system/test-all') !== false ) return current_user_can( 'vmsai_manage_keys' );
 
@@ -163,6 +164,11 @@ class VMSAI_Rest {
 			'vision/hooks'         => array( 'POST', 'vision_hooks' ),
 			'isolator/backdrop'    => array( 'POST', 'isolator_backdrop' ),
 			'isolator/presets'     => array( 'GET', 'isolator_presets' ),
+			'optimizer/scan'       => array( 'GET', 'optimizer_scan' ),
+			'optimizer/regenerate' => array( 'POST', 'optimizer_regenerate' ),
+			'optimizer/queue'      => array( 'POST', 'optimizer_queue' ),
+			'optimizer/quarantine' => array( 'POST', 'optimizer_quarantine' ),
+			'optimizer/restore'    => array( 'POST', 'optimizer_restore' ),
 		);
 
 		foreach ( $routes as $path => $config ) {
@@ -1796,5 +1802,92 @@ class VMSAI_Rest {
 	 */
 	public function isolator_presets() {
 		return new WP_REST_Response( array( 'ok' => true, 'presets' => VMSAI_Isolator::get_backdrop_presets() ), 200 );
+	}
+
+	/**
+	 * Image Optimizer: Scan site media metrics.
+	 */
+	public function optimizer_scan( WP_REST_Request $request ) {
+		$force   = (bool) $request->get_param( 'force' );
+		$summary = VMSAI_Image_Optimizer::scan_summary( $force );
+		$low_res = VMSAI_Image_Optimizer::get_low_res_posts( 50 );
+		$orphans = VMSAI_Image_Optimizer::get_orphan_attachments( 50 );
+		$heavy   = VMSAI_Image_Optimizer::get_heavy_images( 30 );
+
+		return new WP_REST_Response( array(
+			'ok'      => true,
+			'summary' => $summary,
+			'low_res' => $low_res,
+			'orphans' => $orphans,
+			'heavy'   => $heavy,
+		), 200 );
+	}
+
+	/**
+	 * Image Optimizer: Regenerate high-definition image for a post.
+	 */
+	public function optimizer_regenerate( WP_REST_Request $request ) {
+		$post_id  = (int) $request->get_param( 'post_id' );
+		$prompt   = sanitize_textarea_field( (string) $request->get_param( 'prompt' ) );
+		$provider = sanitize_key( (string) $request->get_param( 'provider' ) );
+
+		if ( ! $post_id ) {
+			return new WP_Error( 'invalid_post_id', __( 'Post ID required.', 'vm-social-ai-pro' ), array( 'status' => 400 ) );
+		}
+
+		$res = VMSAI_Image_Optimizer::regenerate_post_image( $post_id, $prompt, $provider );
+		if ( empty( $res['ok'] ) ) {
+			return new WP_Error( 'regen_failed', $res['error'] ?? 'Generation failed', array( 'status' => 500 ) );
+		}
+
+		return new WP_REST_Response( $res, 200 );
+	}
+
+	/**
+	 * Image Optimizer: Queue posts for background auto-regeneration.
+	 */
+	public function optimizer_queue( WP_REST_Request $request ) {
+		$post_ids = (array) $request->get_param( 'post_ids' );
+		if ( empty( $post_ids ) ) {
+			$low_res  = VMSAI_Image_Optimizer::get_low_res_posts( 100 );
+			$post_ids = wp_list_pluck( $low_res, 'post_id' );
+		}
+
+		$queued = VMSAI_Image_Optimizer::queue_posts( $post_ids );
+		return new WP_REST_Response( array( 'ok' => true, 'queued' => $queued ), 200 );
+	}
+
+	/**
+	 * Image Optimizer: Quarantine an orphan attachment (safe staging, no deletion).
+	 */
+	public function optimizer_quarantine( WP_REST_Request $request ) {
+		$attachment_id = (int) $request->get_param( 'attachment_id' );
+		if ( ! $attachment_id ) {
+			return new WP_Error( 'invalid_id', __( 'Attachment ID required.', 'vm-social-ai-pro' ), array( 'status' => 400 ) );
+		}
+
+		$res = VMSAI_Image_Optimizer::quarantine_attachment( $attachment_id );
+		if ( empty( $res['ok'] ) ) {
+			return new WP_Error( 'quarantine_failed', $res['error'] ?? 'Quarantine failed', array( 'status' => 500 ) );
+		}
+
+		return new WP_REST_Response( $res, 200 );
+	}
+
+	/**
+	 * Image Optimizer: Restore a quarantined attachment.
+	 */
+	public function optimizer_restore( WP_REST_Request $request ) {
+		$attachment_id = (int) $request->get_param( 'attachment_id' );
+		if ( ! $attachment_id ) {
+			return new WP_Error( 'invalid_id', __( 'Attachment ID required.', 'vm-social-ai-pro' ), array( 'status' => 400 ) );
+		}
+
+		$res = VMSAI_Image_Optimizer::restore_attachment( $attachment_id );
+		if ( empty( $res['ok'] ) ) {
+			return new WP_Error( 'restore_failed', $res['error'] ?? 'Restore failed', array( 'status' => 500 ) );
+		}
+
+		return new WP_REST_Response( $res, 200 );
 	}
 }
