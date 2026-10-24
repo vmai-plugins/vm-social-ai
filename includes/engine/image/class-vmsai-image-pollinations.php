@@ -8,8 +8,8 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Free, keyless image generation. This is the workhorse for high-volume
- * campaigns where paid image credits would otherwise cap daily output.
+ * Free, keyless image generation. High-quality photorealistic generation
+ * using Flux and Flux-Realism models with automatic fallback.
  */
 class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 
@@ -52,8 +52,20 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 	public function create( $prompt, array $args = array() ) {
 		$width  = (int) ( $args['width'] ?? 1080 );
 		$height = (int) ( $args['height'] ?? 1350 );
-		$model  = VMSAI_Settings::get( 'image_model' )['pollinations'] ?? 'flux';
-		$seed   = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 999999 );
+
+		$configured_model = '';
+		$all_models       = VMSAI_Settings::get( 'image_model', array() );
+		if ( is_array( $all_models ) && ! empty( $all_models['pollinations'] ) ) {
+			$configured_model = trim( (string) $all_models['pollinations'] );
+		}
+
+		// Pro Quality Default: 'flux-realism' produces photographic travel & religious realism without distortion.
+		$model = ! empty( $args['model'] ) ? $args['model'] : ( ! empty( $configured_model ) ? $configured_model : 'flux-realism' );
+		$seed  = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 999999 );
+
+		// CRITICAL: enhance=false preserves prompt fidelity. When set to true, Pollinations' internal
+		// LLM hallucinates and distorts temple/cultural scenes into fantasy or deformed artifacts.
+		$enhance = isset( $args['enhance'] ) ? ( $args['enhance'] ? 'true' : 'false' ) : 'false';
 
 		$query = array(
 			'width'    => $width,
@@ -61,7 +73,7 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			'model'    => $model,
 			'seed'     => $seed,
 			'nologo'   => 'true',
-			'enhance'  => 'true',
+			'enhance'  => $enhance,
 			'safe'     => 'true',
 			'referrer' => substr( (string) ( wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'vmsocialai.local' ), 0, 100 ),
 		);
@@ -71,13 +83,26 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			$query['token'] = $token;
 		}
 
-		$url = self::BASE . rawurlencode( $this->trim_prompt( $prompt ) ) . '?' . http_build_query( $query );
+		$clean_prompt = $this->trim_prompt( $prompt );
+		$url          = self::BASE . rawurlencode( $clean_prompt ) . '?' . http_build_query( $query );
 
 		$response = VMSAI_Http::get( $url, array(
 			'headers' => array( 'Accept' => 'image/jpeg, image/png, image/*' ),
 			'timeout' => 120,
-			'scope'   => 'engine.image.pollinations'
+			'scope'   => 'engine.image.pollinations',
 		) );
+
+		// Resilient Fallback: If 'flux-realism' encounters an issue (e.g. rate limit), fall back to standard 'flux'.
+		if ( ( ! $response['ok'] || strlen( (string) $response['body'] ) < 3000 ) && 'flux-realism' === $model ) {
+			VMSAI_Logger::warn( 'engine.image.pollinations', 'flux-realism failed or returned empty payload, retrying with flux.', array( 'error' => $response['error'] ?? '' ) );
+			$query['model'] = 'flux';
+			$url            = self::BASE . rawurlencode( $clean_prompt ) . '?' . http_build_query( $query );
+			$response       = VMSAI_Http::get( $url, array(
+				'headers' => array( 'Accept' => 'image/jpeg, image/png, image/*' ),
+				'timeout' => 120,
+				'scope'   => 'engine.image.pollinations',
+			) );
+		}
 
 		if ( ! $response['ok'] ) {
 			return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => $response['error'] );
@@ -116,7 +141,7 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 	}
 
 	/**
-	 * Keep the prompt inside a safe URL length.
+	 * Keep the prompt inside a safe URL length while preserving full professional detail.
 	 *
 	 * @param string $prompt Prompt.
 	 * @return string
@@ -124,12 +149,9 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 	private function trim_prompt( $prompt ) {
 		$prompt = preg_replace( '/\s+/', ' ', trim( (string) $prompt ) );
 
-		// Pro Tip: URL length is strictly capped by some CDNs (HTTP 431).
-		// Stay conservative, but cut on a word boundary rather than
-		// mid-word — a prompt chopped inside a word (e.g. "profession")
-		// confuses the model's own prompt "enhance" pass and is a real
-		// contributor to vague/off-topic renders.
-		$limit = 350;
+		// Cap at 1000 characters to prevent URL clipping while ensuring all camera,
+		// lighting, resolution, and photorealistic modifiers are preserved.
+		$limit = 1000;
 		if ( mb_strlen( $prompt ) <= $limit ) {
 			return $prompt;
 		}
