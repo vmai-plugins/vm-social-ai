@@ -719,11 +719,8 @@ class VMSAI_Image_Optimizer {
 		$prompt = ! empty( $custom_prompt ) ? $custom_prompt : self::infer_prompt_for_broken_image( $post_id, $filename, $title );
 
 		$engine = new VMSAI_Image_Engine();
-		$args   = array(
-			'channel' => 'facebook',
-			'model'   => '',
-		);
 		$meta   = array(
+			'channel' => 'facebook',
 			'post_id' => $post_id,
 			'title'   => $title,
 			'topic'   => $title,
@@ -732,7 +729,7 @@ class VMSAI_Image_Optimizer {
 
 		VMSAI_Logger::info( 'optimizer', sprintf( 'Starting 404 Image healing for "%s" in Post #%d', $filename, $post_id ) );
 
-		$result = $engine->create( $prompt, $args, $meta );
+		$result = $engine->create( $prompt, $meta );
 
 		if ( empty( $result['ok'] ) || empty( $result['attachment_id'] ) ) {
 			return array(
@@ -749,7 +746,23 @@ class VMSAI_Image_Optimizer {
 
 		// Place generated file directly into target missing path so any existing URL or HTML immediately resolves
 		if ( file_exists( $new_file ) && ! file_exists( $target_path ) ) {
-			@copy( $new_file, $target_path );
+			$target_ext = strtolower( (string) pathinfo( $target_path, PATHINFO_EXTENSION ) );
+			$src_ext    = strtolower( (string) pathinfo( $new_file, PATHINFO_EXTENSION ) );
+
+			if ( in_array( $target_ext, array( 'webp', 'avif' ), true ) && 'webp' !== $src_ext && function_exists( 'imagewebp' ) ) {
+				$img = @imagecreatefromjpeg( $new_file );
+				if ( ! $img ) {
+					$img = @imagecreatefrompng( $new_file );
+				}
+				if ( $img ) {
+					imagewebp( $img, $target_path, 85 );
+					imagedestroy( $img );
+				} else {
+					@copy( $new_file, $target_path );
+				}
+			} else {
+				@copy( $new_file, $target_path );
+			}
 		}
 
 		// Also update post_content if post_id is provided
