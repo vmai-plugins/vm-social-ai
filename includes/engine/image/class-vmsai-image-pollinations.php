@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Free, keyless image generation. High-quality photorealistic generation
- * using Flux and Flux-Realism models with automatic fallback.
+ * powered by Sana (NVIDIA Linear Attention Diffusion) and Flux.
  */
 class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 
@@ -59,9 +59,18 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			$configured_model = trim( (string) $all_models['pollinations'] );
 		}
 
-		// Pro Quality Default: 'flux-realism' produces photographic travel & religious realism without distortion.
-		$model = ! empty( $args['model'] ) ? $args['model'] : ( ! empty( $configured_model ) ? $configured_model : 'flux-realism' );
-		$seed  = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 999999 );
+		$token = VMSAI_Settings::credential( 'pollinations_token' );
+
+		// Sana is Pollinations' official free diffusion model (NVIDIA Linear Attention, ICLR 2025).
+		// Legacy 'flux' models now require a paid token; without a token Pollinations throttles with HTTP 402.
+		$default_model = $token ? 'flux-realism' : 'sana';
+		$model         = ! empty( $args['model'] ) ? $args['model'] : ( ! empty( $configured_model ) ? $configured_model : $default_model );
+
+		if ( ! $token && in_array( $model, array( 'flux', 'flux-realism', 'turbo' ), true ) ) {
+			$model = 'sana';
+		}
+
+		$seed = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 999999 );
 
 		// CRITICAL: enhance=false preserves prompt fidelity. When set to true, Pollinations' internal
 		// LLM hallucinates and distorts temple/cultural scenes into fantasy or deformed artifacts.
@@ -78,7 +87,6 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			'referrer' => substr( (string) ( wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'vmsocialai.local' ), 0, 100 ),
 		);
 
-		$token = VMSAI_Settings::credential( 'pollinations_token' );
 		if ( $token ) {
 			$query['token'] = $token;
 		}
@@ -92,10 +100,10 @@ class VMSAI_Image_Pollinations implements VMSAI_Image_Provider {
 			'scope'   => 'engine.image.pollinations',
 		) );
 
-		// Resilient Fallback: If 'flux-realism' encounters an issue (e.g. rate limit), fall back to standard 'flux'.
-		if ( ( ! $response['ok'] || strlen( (string) $response['body'] ) < 3000 ) && 'flux-realism' === $model ) {
-			VMSAI_Logger::warn( 'engine.image.pollinations', 'flux-realism failed or returned empty payload, retrying with flux.', array( 'error' => $response['error'] ?? '' ) );
-			$query['model'] = 'flux';
+		// Resilient Fallback: If primary model encounters an issue, fallback directly to 'sana'
+		if ( ( ! $response['ok'] || strlen( (string) $response['body'] ) < 3000 ) && 'sana' !== $model ) {
+			VMSAI_Logger::warn( 'engine.image.pollinations', sprintf( 'Model %s failed, retrying with robust sana.', $model ), array( 'error' => $response['error'] ?? '' ) );
+			$query['model'] = 'sana';
 			$url            = self::BASE . rawurlencode( $clean_prompt ) . '?' . http_build_query( $query );
 			$response       = VMSAI_Http::get( $url, array(
 				'headers' => array( 'Accept' => 'image/jpeg, image/png, image/*' ),

@@ -188,7 +188,8 @@ class VMSAI_Model_Sync {
 	 */
 	private static function pollinations_models() {
 		return array(
-			array( 'id' => 'flux', 'label' => 'Flux — balanced, best default', 'context' => 0, 'free' => true ),
+			array( 'id' => 'sana', 'label' => 'Sana — ultra-fast diffusion (Free default)', 'context' => 0, 'free' => true ),
+			array( 'id' => 'flux', 'label' => 'Flux — balanced (Token required)', 'context' => 0, 'free' => false ),
 			array( 'id' => 'flux-realism', 'label' => 'Flux Realism — photographic', 'context' => 0, 'free' => true ),
 			array( 'id' => 'flux-anime', 'label' => 'Flux Anime — illustrated', 'context' => 0, 'free' => true ),
 			array( 'id' => 'flux-3d', 'label' => 'Flux 3D — product renders', 'context' => 0, 'free' => true ),
