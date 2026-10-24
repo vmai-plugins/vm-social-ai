@@ -1106,4 +1106,25 @@ jQuery( function ( $ ) {
 			toast( err.message || 'Quarantine failed.', true );
 		} );
 	} );
+
+	// Heal 404 broken image with AI
+	$( document ).on( 'click', '.vmsai-opt-heal-btn', function () {
+		var $btn = $( this );
+		var postId = $btn.data( 'postid' );
+		var brokenUrl = $btn.data( 'url' );
+		var prompt = $btn.data( 'prompt' );
+
+		$btn.prop( 'disabled', true ).text( '🩹 Healing…' );
+		api( '/optimizer/heal', 'POST', { post_id: postId, url: brokenUrl, prompt: prompt } ).then( function ( res ) {
+			$btn.prop( 'disabled', false ).text( '✓ Healed!' ).css( 'color', '#10b981' );
+			toast( '404 Image successfully inferred, generated & placed at target path!' );
+			var $tr = $btn.closest( 'tr' );
+			$tr.find( 'td:first' ).html( '<span style="display:inline-block;padding:3px 6px;border-radius:4px;background:rgba(16,185,129,0.2);color:#10b981;font-weight:700;font-size:11px;">200 OK</span>' );
+			var count = parseInt( $( '#vmsai-metric-broken' ).text().replace( /,/g, '' ), 10 );
+			if ( count > 0 ) $( '#vmsai-metric-broken' ).text( cfg.number( count - 1 ) );
+		} ).catch( function ( err ) {
+			$btn.prop( 'disabled', false ).text( '⚡ Infer & Heal' );
+			toast( err.message || 'Healing failed.', true );
+		} );
+	} );
 } );

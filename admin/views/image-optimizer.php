@@ -11,6 +11,7 @@ $vmsai_opt_summary = VMSAI_Image_Optimizer::scan_summary();
 $vmsai_low_res     = VMSAI_Image_Optimizer::get_low_res_posts( 30 );
 $vmsai_orphans     = VMSAI_Image_Optimizer::get_orphan_attachments( 25 );
 $vmsai_heavy       = VMSAI_Image_Optimizer::get_heavy_images( 20 );
+$vmsai_broken      = VMSAI_Image_Optimizer::get_broken_images( 35 );
 ?>
 
 <div class="vmsai-optimizer" id="vmsai-optimizer-app">
@@ -48,6 +49,12 @@ $vmsai_heavy       = VMSAI_Image_Optimizer::get_heavy_images( 20 );
 			</div>
 
 			<div class="vmsai-metric-card" style="background: var(--raised, #13151f); border: 1px solid var(--hairline, rgba(255,255,255,0.08)); border-radius: 12px; padding: 18px;">
+				<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #94a3b8); margin-bottom: 6px;"><?php esc_html_e( '404 Broken Images', 'vm-social-ai-pro' ); ?></div>
+				<div style="font-size: 28px; font-weight: 800; color: #ec4899;" id="vmsai-metric-broken"><?php echo esc_html( number_format_i18n( $vmsai_opt_summary['broken_count'] ?? count( $vmsai_broken ) ) ); ?></div>
+				<div style="font-size: 11px; color: var(--muted, #94a3b8); margin-top: 4px;"><?php esc_html_e( 'Missing URLs returning 404', 'vm-social-ai-pro' ); ?></div>
+			</div>
+
+			<div class="vmsai-metric-card" style="background: var(--raised, #13151f); border: 1px solid var(--hairline, rgba(255,255,255,0.08)); border-radius: 12px; padding: 18px;">
 				<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #94a3b8); margin-bottom: 6px;"><?php esc_html_e( 'Regeneration Queue', 'vm-social-ai-pro' ); ?></div>
 				<div style="font-size: 28px; font-weight: 800; color: var(--gold, #d97706);" id="vmsai-metric-queue"><?php echo esc_html( number_format_i18n( $vmsai_opt_summary['queue_count'] ) ); ?></div>
 				<div style="font-size: 11px; color: var(--muted, #94a3b8); margin-top: 4px;"><?php esc_html_e( 'Automated WP-Cron batch items', 'vm-social-ai-pro' ); ?></div>
@@ -55,9 +62,12 @@ $vmsai_heavy       = VMSAI_Image_Optimizer::get_heavy_images( 20 );
 		</div>
 
 		<!-- Studio Sub-Navigation Tabs -->
-		<div style="display: flex; gap: 10px; border-bottom: 1px solid var(--hairline, rgba(255,255,255,0.08)); margin-top: 30px; padding-bottom: 12px;">
+		<div style="display: flex; gap: 10px; border-bottom: 1px solid var(--hairline, rgba(255,255,255,0.08)); margin-top: 30px; padding-bottom: 12px; overflow-x: auto;">
 			<button type="button" class="vmsai-btn vmsai-btn--secondary is-active vmsai-opt-tab-btn" data-tab="lowres" style="border-radius: 8px;">
 				✨ <?php esc_html_e( 'Low-Res & Missing Images (AI Regenerate)', 'vm-social-ai-pro' ); ?>
+			</button>
+			<button type="button" class="vmsai-btn vmsai-btn--secondary vmsai-opt-tab-btn" data-tab="broken" style="border-radius: 8px; color: #ec4899;">
+				🩹 <?php esc_html_e( '404 Broken Images (Infer & Heal)', 'vm-social-ai-pro' ); ?>
 			</button>
 			<button type="button" class="vmsai-btn vmsai-btn--secondary vmsai-opt-tab-btn" data-tab="orphans" style="border-radius: 8px;">
 				🛡️ <?php esc_html_e( 'Unused Assets (Safe Quarantine)', 'vm-social-ai-pro' ); ?>
@@ -124,6 +134,65 @@ $vmsai_heavy       = VMSAI_Image_Optimizer::get_heavy_images( 20 );
 									<td style="text-align: right;">
 										<button type="button" class="vmsai-btn vmsai-btn--secondary vmsai-opt-regen-single-btn" data-id="<?php echo esc_attr( $item['post_id'] ); ?>" data-title="<?php echo esc_attr( $item['title'] ); ?>" style="padding: 5px 10px; font-size: 11px;">
 											⚡ <?php esc_html_e( 'Regenerate', 'vm-social-ai-pro' ); ?>
+										</button>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- TAB: 404 BROKEN IMAGES (INFER & HEAL) -->
+		<div id="vmsai-opt-tab-broken" class="vmsai-opt-view-pane" style="display: none; margin-top: 25px;">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+				<div>
+					<h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff;"><?php esc_html_e( '🩹 404 Image Inference & Auto-Healer Studio', 'vm-social-ai-pro' ); ?></h3>
+					<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--muted, #94a3b8);"><?php esc_html_e( 'Detects missing 404 images in published articles, infers the intended visual subject from context & filenames, and regenerates 8K replacements.', 'vm-social-ai-pro' ); ?></p>
+				</div>
+			</div>
+
+			<div style="overflow-x: auto;">
+				<table class="wp-list-table widefat fixed striped" style="background: transparent; border: 1px solid var(--hairline, rgba(255,255,255,0.08)); border-radius: 8px; color: #cbd5e1;">
+					<thead>
+						<tr>
+							<th style="width: 60px;"><?php esc_html_e( 'Status', 'vm-social-ai-pro' ); ?></th>
+							<th><?php esc_html_e( 'Missing Image / Location', 'vm-social-ai-pro' ); ?></th>
+							<th style="width: 140px;"><?php esc_html_e( 'Page / Event', 'vm-social-ai-pro' ); ?></th>
+							<th><?php esc_html_e( 'Inferred Visual Brief', 'vm-social-ai-pro' ); ?></th>
+							<th style="width: 150px; text-align: right;"><?php esc_html_e( 'Action', 'vm-social-ai-pro' ); ?></th>
+						</tr>
+					</thead>
+					<tbody id="vmsai-opt-broken-body">
+						<?php if ( empty( $vmsai_broken ) ) : ?>
+							<tr>
+								<td colspan="5" style="text-align: center; padding: 25px; color: #10b981;">
+									🎉 <?php esc_html_e( 'Zero 404 broken images detected across published posts and pages!', 'vm-social-ai-pro' ); ?>
+								</td>
+							</tr>
+						<?php else : ?>
+							<?php foreach ( $vmsai_broken as $b_item ) : ?>
+								<tr id="vmsai-broken-<?php echo esc_attr( $b_item['id'] ); ?>">
+									<td>
+										<span style="display: inline-block; padding: 3px 6px; border-radius: 4px; background: rgba(239,68,68,0.2); color: #ef4444; font-weight: 700; font-size: 11px;">404</span>
+									</td>
+									<td>
+										<strong style="color: #f87171; word-break: break-all;"><?php echo esc_html( $b_item['filename'] ); ?></strong>
+										<div style="font-size: 11px; color: var(--muted, #94a3b8); word-break: break-all; margin-top: 2px;"><?php echo esc_html( $b_item['missing_file'] ); ?></div>
+									</td>
+									<td>
+										<a href="<?php echo esc_url( get_permalink( $b_item['post_id'] ) ); ?>" target="_blank" style="color: #60a5fa; font-size: 12px; font-weight: 600;">
+											<?php echo esc_html( $b_item['post_title'] ); ?>
+										</a>
+										<div style="font-size: 10px; color: var(--muted, #94a3b8);"><?php echo esc_html( $b_item['post_type'] ); ?></div>
+									</td>
+									<td>
+										<span style="font-size: 11px; color: #cbd5e1; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"><?php echo esc_html( $b_item['inferred'] ); ?></span>
+									</td>
+									<td style="text-align: right;">
+										<button type="button" class="vmsai-btn vmsai-btn--secondary vmsai-opt-heal-btn" data-postid="<?php echo esc_attr( $b_item['post_id'] ); ?>" data-url="<?php echo esc_attr( $b_item['url'] ); ?>" data-prompt="<?php echo esc_attr( $b_item['inferred'] ); ?>" style="padding: 5px 10px; font-size: 11px; color: #ec4899; border-color: rgba(236,72,153,0.3);">
+											⚡ <?php esc_html_e( 'Infer & Heal', 'vm-social-ai-pro' ); ?>
 										</button>
 									</td>
 								</tr>

@@ -145,7 +145,10 @@ class VMSAI_Image_Optimizer {
 		// 4. Inspect Heavy Images
 		$heavy = self::get_heavy_images( 100 );
 
-		// 5. Active Queue Length
+		// 5. Inspect 404 Broken Images
+		$broken = self::get_broken_images( 100 );
+
+		// 6. Active Queue Length
 		$queue = get_option( self::QUEUE_OPTION, array() );
 
 		$summary = array(
@@ -155,6 +158,7 @@ class VMSAI_Image_Optimizer {
 			'quarantined'        => $quarantined,
 			'low_res_count'      => count( $low_res ),
 			'heavy_count'        => count( $heavy ),
+			'broken_count'       => count( $broken ),
 			'queue_count'        => count( $queue ),
 			'last_scan'          => current_time( 'mysql' ),
 		);
@@ -577,6 +581,200 @@ class VMSAI_Image_Optimizer {
 			'ok'            => true,
 			'attachment_id' => $attachment_id,
 			'message'       => __( 'Attachment restored to active uploads directory.', 'vm-social-ai-pro' ),
+		);
+	}
+
+	/**
+	 * Retrieve all 404 broken images in post_content and broken attachments.
+	 *
+	 * @param int $limit Max items to return.
+	 * @return array
+	 */
+	public static function get_broken_images( $limit = 50 ) {
+		global $wpdb;
+
+		$upload_info = wp_upload_dir();
+		$basedir     = $upload_info['basedir'];
+		$baseurl     = $upload_info['baseurl'];
+
+		$broken = array();
+
+		// 1. Scan published post_content for broken local image URLs
+		$posts = $wpdb->get_results(
+			"SELECT ID, post_title, post_type, post_content 
+			FROM {$wpdb->posts} 
+			WHERE post_type IN ('post', 'page', 'togo_trip', 'event', 'product') 
+			  AND post_status = 'publish' 
+			ORDER BY ID DESC",
+			ARRAY_A
+		);
+
+		foreach ( $posts as $p ) {
+			if ( count( $broken ) >= $limit ) {
+				break;
+			}
+			if ( empty( $p['post_content'] ) ) {
+				continue;
+			}
+
+			if ( preg_match_all( '/https?:\/\/[^\s"\'<>]+\/wp-content\/uploads\/([^\s"\'<>]+)/i', $p['post_content'], $matches ) ) {
+				foreach ( $matches[1] as $idx => $rel_path ) {
+					if ( count( $broken ) >= $limit ) {
+						break;
+					}
+					$clean_rel  = preg_replace( '/[?#].*$/', '', $rel_path );
+					$clean_rel  = rtrim( $clean_rel, '\\/' );
+					$local_path = $basedir . '/' . ltrim( $clean_rel, '/' );
+
+					if ( ! file_exists( $local_path ) ) {
+						$full_url = $matches[0][ $idx ];
+						$filename = basename( $clean_rel );
+
+						// Deduplicate by URL
+						$key = md5( $full_url . $p['ID'] );
+						$broken[ $key ] = array(
+							'id'          => $key,
+							'post_id'     => (int) $p['ID'],
+							'post_title'  => $p['post_title'],
+							'post_type'   => $p['post_type'],
+							'url'         => $full_url,
+							'filename'    => $filename,
+							'missing_file'=> $clean_rel,
+							'inferred'    => self::infer_prompt_for_broken_image( $p['ID'], $filename, $p['post_title'] ),
+						);
+					}
+				}
+			}
+		}
+
+		return array_values( $broken );
+	}
+
+	/**
+	 * Infer visual prompt from broken image filename, parent post context, and destination topic.
+	 *
+	 * @param int    $post_id    Parent post ID.
+	 * @param string $filename   Broken image filename.
+	 * @param string $post_title Parent post title.
+	 * @return string
+	 */
+	public static function infer_prompt_for_broken_image( $post_id, $filename, $post_title = '' ) {
+		$base_name   = pathinfo( $filename, PATHINFO_FILENAME );
+		$clean_name  = preg_replace( '/-\d+x\d+$/', '', $base_name );
+		$clean_name  = preg_replace( '/-scaled$/', '', $clean_name );
+		$clean_name  = preg_replace( '/-\d+$/', '', $clean_name );
+		$words       = trim( str_replace( array( '-', '_' ), ' ', $clean_name ) );
+
+		if ( empty( $post_title ) && $post_id ) {
+			$post_title = get_the_title( $post_id );
+		}
+		$clean_title = preg_replace( '/[^\w\s\-]/u', '', $post_title );
+		$clean_title = trim( preg_replace( '/\s+/', ' ', $clean_title ) );
+
+		$is_generic = preg_match( '/^(image|img|event-detail|detail|p\d+|rectangle|banner|photo|dsc|pic)/i', $clean_name );
+
+		if ( ! $is_generic && strlen( $words ) > 4 ) {
+			$subject = ucwords( $words );
+			return "High-definition travel photography of {$subject} for {$clean_title}, vibrant sacred atmosphere, cinematic lighting, 8k resolution, authentic editorial quality";
+		}
+
+		if ( false !== stripos( $clean_title, 'buddha' ) || false !== stripos( $clean_title, 'bodhgaya' ) ) {
+			return "Luminous Mahabodhi Temple in Bodhgaya, monks in saffron robes meditating under the sacred Bodhi tree, serene morning golden sunlight, authentic spiritual heritage, 8k documentary travel photography";
+		}
+		if ( false !== stripos( $clean_title, 'magh mela' ) || false !== stripos( $clean_title, 'prayagraj' ) || false !== stripos( $clean_title, 'sangam' ) ) {
+			return "Majestic Triveni Sangam in Prayagraj during sacred holy bathing ritual, colorful traditional boats, migratory Siberian gulls flying over confluence waters, morning sunbeams, 8k photography";
+		}
+		if ( false !== stripos( $clean_title, 'aarti' ) || false !== stripos( $clean_title, 'dashashwamedh' ) ) {
+			return "Spectacular evening Ganga Aarti ceremony at Dashashwamedh Ghat Varanasi, priests holding multi-tiered blazing brass lamps, sacred river reflections, viewed from wooden boat, 8k cinematic photography";
+		}
+		if ( false !== stripos( $clean_title, 'offer' ) || false !== stripos( $clean_title, 'deal' ) ) {
+			return "Luxury pilgrimage and cultural heritage travel in India, iconic Varanasi ghats and temples, premium holiday package promotional editorial aesthetic, 8k commercial photography";
+		}
+
+		return "Exquisite professional travel photography capturing the essence of {$clean_title}, vibrant natural colors, ultra-crisp focus, cinematic lighting, 8k commercial magazine quality";
+	}
+
+	/**
+	 * Autonomous 404 Image Healer: Generates high-definition replacement and places it at the missing file path.
+	 *
+	 * @param int    $post_id       Parent post ID.
+	 * @param string $broken_url    Missing image URL or relative path.
+	 * @param string $custom_prompt Custom prompt or auto-inferred.
+	 * @return array
+	 */
+	public static function heal_broken_image( $post_id, $broken_url, $custom_prompt = '' ) {
+		$upload_info = wp_upload_dir();
+		$basedir     = $upload_info['basedir'];
+		$baseurl     = $upload_info['baseurl'];
+
+		$rel_path    = str_replace( array( $baseurl, 'https://tripcosmos.co/wp-content/uploads', 'http://tripcosmos.co/wp-content/uploads' ), '', $broken_url );
+		$rel_path    = preg_replace( '/[?#].*$/', '', $rel_path );
+		$rel_path    = '/' . ltrim( $rel_path, '/' );
+		$target_path = $basedir . $rel_path;
+		$filename    = basename( $target_path );
+
+		$post  = $post_id ? get_post( $post_id ) : null;
+		$title = $post ? $post->post_title : $filename;
+
+		$prompt = ! empty( $custom_prompt ) ? $custom_prompt : self::infer_prompt_for_broken_image( $post_id, $filename, $title );
+
+		$engine = new VMSAI_Image_Engine();
+		$args   = array(
+			'channel' => 'facebook',
+			'model'   => '',
+		);
+		$meta   = array(
+			'post_id' => $post_id,
+			'title'   => $title,
+			'topic'   => $title,
+			'format'  => 'image',
+		);
+
+		VMSAI_Logger::info( 'optimizer', sprintf( 'Starting 404 Image healing for "%s" in Post #%d', $filename, $post_id ) );
+
+		$result = $engine->create( $prompt, $args, $meta );
+
+		if ( empty( $result['ok'] ) || empty( $result['attachment_id'] ) ) {
+			return array(
+				'ok'    => false,
+				'error' => ! empty( $result['error'] ) ? $result['error'] : __( 'AI generation failed.', 'vm-social-ai-pro' ),
+			);
+		}
+
+		$new_att_id = (int) $result['attachment_id'];
+		$new_file   = get_attached_file( $new_att_id );
+
+		$target_dir = dirname( $target_path );
+		wp_mkdir_p( $target_dir );
+
+		// Place generated file directly into target missing path so any existing URL or HTML immediately resolves
+		if ( file_exists( $new_file ) && ! file_exists( $target_path ) ) {
+			@copy( $new_file, $target_path );
+		}
+
+		// Also update post_content if post_id is provided
+		if ( $post && ! empty( $post->post_content ) ) {
+			$new_url = wp_get_attachment_url( $new_att_id );
+			if ( $new_url && false !== strpos( $post->post_content, $broken_url ) ) {
+				$updated_content = str_replace( $broken_url, $new_url, $post->post_content );
+				wp_update_post( array(
+					'ID'           => $post->ID,
+					'post_content' => $updated_content,
+				) );
+			}
+		}
+
+		delete_transient( 'vmsai_opt_summary_cache' );
+
+		VMSAI_Logger::info( 'optimizer', sprintf( 'Successfully healed 404 image: "%s" via Attachment #%d', $filename, $new_att_id ) );
+
+		return array(
+			'ok'            => true,
+			'post_id'       => $post_id,
+			'attachment_id' => $new_att_id,
+			'url'           => wp_get_attachment_url( $new_att_id ),
+			'healed_path'   => $target_path,
+			'prompt'        => $prompt,
 		);
 	}
 }

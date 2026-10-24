@@ -169,6 +169,8 @@ class VMSAI_Rest {
 			'optimizer/queue'      => array( 'POST', 'optimizer_queue' ),
 			'optimizer/quarantine' => array( 'POST', 'optimizer_quarantine' ),
 			'optimizer/restore'    => array( 'POST', 'optimizer_restore' ),
+			'optimizer/broken'     => array( 'GET', 'optimizer_broken' ),
+			'optimizer/heal'       => array( 'POST', 'optimizer_heal' ),
 		);
 
 		foreach ( $routes as $path => $config ) {
@@ -1886,6 +1888,34 @@ class VMSAI_Rest {
 		$res = VMSAI_Image_Optimizer::restore_attachment( $attachment_id );
 		if ( empty( $res['ok'] ) ) {
 			return new WP_Error( 'restore_failed', $res['error'] ?? 'Restore failed', array( 'status' => 500 ) );
+		}
+
+		return new WP_REST_Response( $res, 200 );
+	}
+
+	/**
+	 * Image Optimizer: List all 404 broken images with inferred prompts.
+	 */
+	public function optimizer_broken( WP_REST_Request $request ) {
+		$broken = VMSAI_Image_Optimizer::get_broken_images( 50 );
+		return new WP_REST_Response( array( 'ok' => true, 'broken' => $broken ), 200 );
+	}
+
+	/**
+	 * Image Optimizer: Heal a 404 broken image with AI generation.
+	 */
+	public function optimizer_heal( WP_REST_Request $request ) {
+		$post_id    = (int) $request->get_param( 'post_id' );
+		$broken_url = esc_url_raw( (string) $request->get_param( 'url' ) );
+		$prompt     = sanitize_textarea_field( (string) $request->get_param( 'prompt' ) );
+
+		if ( empty( $broken_url ) ) {
+			return new WP_Error( 'invalid_url', __( 'Broken image URL required.', 'vm-social-ai-pro' ), array( 'status' => 400 ) );
+		}
+
+		$res = VMSAI_Image_Optimizer::heal_broken_image( $post_id, $broken_url, $prompt );
+		if ( empty( $res['ok'] ) ) {
+			return new WP_Error( 'heal_failed', $res['error'] ?? 'Healing failed', array( 'status' => 500 ) );
 		}
 
 		return new WP_REST_Response( $res, 200 );
