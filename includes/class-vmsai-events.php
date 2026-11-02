@@ -158,24 +158,55 @@ class VMSAI_Events {
 		global $wpdb;
 		$channels = (array) json_decode( (string) $campaign['channels'], true );
 
+		// High-converting Sovereign CTA for VM Studio
+		$vm_cta = "\nCALL TO ACTION: Invite the audience to modernize their business with VM Studio: Sovereign Custom Web Architecture, Autonomous AI Voice Telephony & Enterprise WhatsApp CRM. Visit https://vmstudio.digital or message on WhatsApp (+91 83683 16403). Official Article Link: " . $link;
+		$enriched_angle = $link . $brief_context . $vm_cta;
+
+		// Multi-Format Social Strategy: Carousels, 9:16 Video Reels, Infographics & Thought Leadership
+		$channel_formats = array(
+			'instagram' => array( 'carousel', 'short' ),
+			'facebook'  => array( 'image', 'short' ),
+			'linkedin'  => array( 'carousel' ),
+			'youtube'   => array( 'short' ),
+			'x'         => array( 'image' ),
+		);
+
+		$plan_table = VMSAI_Install::table( 'plan' );
+
 		foreach ( $channels as $channel ) {
-			$wpdb->insert(
-				VMSAI_Install::table( 'plan' ),
-				array(
-					'campaign_id' => (int) $campaign['id'],
-					'post_id'     => (int) $post_id,
-					'slot_date'   => current_time( 'Y-m-d' ),
-					'slot_time'   => current_time( 'H:i:s' ),
-					'channel'     => $channel,
-					'pillar'      => $pillar,
-					'format'      => 'image',
-					'topic'       => $topic,
-					'keyword'     => $seo_keywords,
-					'angle'       => $link . $brief_context,
-					'status'      => 'planned',
-					'created_at'  => current_time( 'mysql', true ),
-				)
-			);
+			$formats = isset( $channel_formats[ $channel ] ) ? $channel_formats[ $channel ] : array( 'image' );
+			foreach ( $formats as $fmt ) {
+				$wpdb->insert(
+					$plan_table,
+					array(
+						'campaign_id' => (int) $campaign['id'],
+						'post_id'     => (int) $post_id,
+						'slot_date'   => current_time( 'Y-m-d' ),
+						'slot_time'   => current_time( 'H:i:s' ),
+						'channel'     => $channel,
+						'pillar'      => $pillar,
+						'format'      => $fmt,
+						'topic'       => $topic,
+						'keyword'     => $seo_keywords,
+						'angle'       => $enriched_angle,
+						'status'      => 'planned',
+						'created_at'  => current_time( 'mysql', true ),
+					)
+				);
+				$slot_id = $wpdb->insert_id;
+
+				// Immediately trigger instant composition if class exists so content is queued without waiting
+				if ( $slot_id && class_exists( 'VMSAI_Composer' ) ) {
+					$slot = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM `$plan_table` WHERE id = %d", $slot_id ), ARRAY_A );
+					if ( $slot ) {
+						try {
+							VMSAI_Composer::compose( $slot );
+						} catch ( \Throwable $t ) {
+							// Composer failures will naturally be retried by the scheduler
+						}
+					}
+				}
+			}
 		}
 
 		VMSAI_Logger::info( 'events', 'Site activity detected; injected new slots into the plan.', array( 'topic' => $topic ) );
