@@ -135,6 +135,11 @@ class VMSAI_Events {
 	private function inject_event( $topic, $link, $pillar, $post_id = 0, $snippet = '' ) {
 		$campaign = VMSAI_Planner::active_campaign();
 		if ( ! $campaign ) {
+			global $wpdb;
+			$campaigns_table = VMSAI_Install::table( 'campaigns' );
+			$campaign = $wpdb->get_row( "SELECT * FROM `$campaigns_table` WHERE status = 'active' ORDER BY id DESC LIMIT 1", ARRAY_A );
+		}
+		if ( ! $campaign ) {
 			return;
 		}
 
