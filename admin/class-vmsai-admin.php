@@ -83,12 +83,16 @@ class VMSAI_Admin {
 	 * @return void
 	 */
 	public function maybe_redirect() {
+		if ( isset( $_GET['page'] ) && in_array( sanitize_key( wp_unslash( $_GET['page'] ) ), array( 'vm-social-ai-channels', 'vm-social-ai' ), true ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
+			exit;
+		}
 		// Screens that used to be their own top-level tab and are now sections
 		// inside another one. Forward old links and bookmarks rather than
 		// letting them fall through to the dashboard. Runs on admin_init so a
 		// real redirect is still possible, before any page output.
 		$moved = array(
-			'plans'     => 'settings#vmsai-section-plans',
+			'plans'     => 'settings',
 			'image-lab' => 'labs#vmsai-section-image-lab',
 			'video-lab' => 'labs#vmsai-section-video-lab',
 		);
@@ -129,6 +133,55 @@ class VMSAI_Admin {
 			array( $this, 'render' ),
 			'dashicons-megaphone',
 			26
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'Dashboard', 'vm-social-ai-pro' ),
+			__( 'Dashboard', 'vm-social-ai-pro' ),
+			'vmsai_read',
+			self::SLUG,
+			array( $this, 'render' )
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'Queue', 'vm-social-ai-pro' ),
+			__( 'Queue', 'vm-social-ai-pro' ),
+			'vmsai_read',
+			self::SLUG . '&tab=queue',
+			array( $this, 'render' )
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'Plan & Campaigns', 'vm-social-ai-pro' ),
+			__( 'Plan & Campaigns', 'vm-social-ai-pro' ),
+			'vmsai_read',
+			self::SLUG . '&tab=plan',
+			array( $this, 'render' )
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'Channels & Settings', 'vm-social-ai-pro' ),
+			__( 'Channels & Settings', 'vm-social-ai-pro' ),
+			'vmsai_manage_keys',
+			self::SLUG . '&tab=settings',
+			array( $this, 'render' )
+		);
+
+		// Alias for vmsai-queue
+		add_submenu_page(
+			null,
+			'Queue',
+			'Queue',
+			'vmsai_read',
+			'vmsai-queue',
+			function() {
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=queue' ) );
+				exit;
+			}
 		);
 	}
 
@@ -242,9 +295,7 @@ class VMSAI_Admin {
 			case 'settings':
 				$this->save_settings();
 				break;
-			case 'plans':
-				$this->save_plans();
-				break;
+
 			case 'brain':
 				$this->save_brain();
 				break;
@@ -262,7 +313,7 @@ class VMSAI_Admin {
 
 		if ( 'settings' === $section ) {
 			$redirect_tab = 'settings';
-		} elseif ( in_array( $section, array( 'engines', 'channels', 'logs', 'plans', 'updates' ), true ) ) {
+		} elseif ( in_array( $section, array( 'engines', 'channels', 'logs', 'updates' ), true ) ) {
 			$redirect_tab  = 'settings';
 			$redirect_hash = '#vmsai-section-' . $section;
 		} elseif ( isset( self::tabs()[ $section ] ) ) {
@@ -293,12 +344,17 @@ class VMSAI_Admin {
 		$video_chain = array_values( array_filter( array_map( 'sanitize_key', (array) ( $post['video_chain'] ?? array() ) ) ) );
 
 		$engine_preset = sanitize_key( $post['engine_preset'] ?? 'omniroute' );
-		if ( 'omniroute' === $engine_preset ) {
+		if ( ! empty( $post['video_source'] ) ) {
+			VMSAI_Settings::set( 'video_source', sanitize_key( $post['video_source'] ) );
+		} elseif ( 'omniroute' === $engine_preset ) {
 			if ( ! in_array( 'omniroute', $text_chain, true ) ) array_unshift( $text_chain, 'omniroute' );
 			if ( ! in_array( 'omniroute', $image_chain, true ) ) array_unshift( $image_chain, 'omniroute' );
 			if ( ! in_array( 'pollinations', $image_chain, true ) ) $image_chain[] = 'pollinations';
 			if ( ! in_array( 'omniroute', $video_chain, true ) ) array_unshift( $video_chain, 'omniroute' );
-			VMSAI_Settings::set( 'video_source', 'omniroute' );
+			if ( empty( VMSAI_Settings::get( 'video_source' ) ) ) {
+				$default_vid = '' !== VMSAI_Settings::credential( 'pexels_key' ) ? 'pexels' : 'omniroute';
+				VMSAI_Settings::set( 'video_source', $default_vid );
+			}
 		}
 		VMSAI_Settings::update(
 			array(
@@ -544,6 +600,6 @@ class VMSAI_Admin {
 	 * @return string
 	 */
 	public static function upgrade_url() {
-		return self::url( 'settings' ) . '#vmsai-section-plans';
+		return self::url( 'settings' );
 	}
 }

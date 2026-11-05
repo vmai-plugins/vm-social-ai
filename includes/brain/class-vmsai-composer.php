@@ -431,9 +431,26 @@ KEY WRITING ATTRIBUTES:
 		if ( $cta ) {
 			$full_body .= "\n\n" . $cta;
 		}
+		// Blog post resource attribution & link
+		if ( $post_id && 'post' === get_post_type( $post_id ) ) {
+			$post_url = get_permalink( $post_id );
+			if ( $post_url && false === strpos( $full_body, $post_url ) ) {
+				if ( 'instagram' === $channel ) {
+					$full_body .= "\n\n🔗 Full Guide & Itinerary: Link in bio (" . $post_url . ")";
+				} else {
+					$full_body .= "\n\n🔗 Read Full Guide: " . $post_url;
+				}
+			}
+		}
 		if ( ! empty($hashtags) ) {
 			$full_body .= "\n\n" . implode( ' ', array_map( fn( $h ) => '#' . $h, $hashtags ) );
 		}
+
+		// ELITE FEED OPTIMIZATION: Transform any remaining markdown **bold** into native Unicode bold
+		// so Instagram, Facebook, and LinkedIn render bold typography without ugly raw asterisks.
+		$full_body = self::convert_markdown_bold_to_unicode( $full_body );
+		$body      = self::convert_markdown_bold_to_unicode( $body );
+		$cta       = self::convert_markdown_bold_to_unicode( $cta );
 
 		// SHOPPABLE METADATA: Link Woo product details if this is a product-led post
 		$product_data = array();
@@ -633,7 +650,19 @@ KEY WRITING ATTRIBUTES:
 				// original data if needed. Uses $spec['hashtags'] (the
 				// channel's own cap, already in scope), not a hardcoded 5 —
 				// e.g. GBP's spec is 0 ("no hashtags, no emoji clutter").
-				$full_body = ( $slide['body'] ?? '' ) . "\n\n" . ( $data['cta'] ?? '' ) . "\n\n" . implode(' ', array_map(fn($h) => '#'.$h, self::normalise_hashtags($data['hashtags'] ?? [], (int) $spec['hashtags'])));
+				$full_body = ( $slide['body'] ?? '' ) . "\n\n" . ( $data['cta'] ?? '' );
+				$post_id   = (int) ( $slot['post_id'] ?? 0 );
+				if ( $post_id && 'post' === get_post_type( $post_id ) ) {
+					$post_url = get_permalink( $post_id );
+					if ( $post_url && false === strpos( $full_body, $post_url ) ) {
+						if ( 'instagram' === $channel ) {
+							$full_body .= "\n\n🔗 Full Guide & Itinerary: Link in bio (" . $post_url . ")";
+						} else {
+							$full_body .= "\n\n🔗 Read Full Guide: " . $post_url;
+						}
+					}
+				}
+				$full_body .= "\n\n" . implode(' ', array_map(fn($h) => '#'.$h, self::normalise_hashtags($data['hashtags'] ?? [], (int) $spec['hashtags'])));
 				global $wpdb;
 				$wpdb->update( VMSAI_Install::table('queue'), array('body' => $full_body), array('id' => $id) );
 			}
@@ -827,5 +856,37 @@ KEY WRITING ATTRIBUTES:
 		}
 
 		return trim( $trimmed ) . '…';
+	}
+	/**
+	 * Convert standard markdown **bold text** into mathematical Unicode bold (e.g. ???????? ????????).
+	 * Native Instagram & Facebook feeds don't parse markdown and display raw **asterisks**.
+	 * Unicode bold renders natively in mobile apps across Instagram, Facebook, LinkedIn, X, Threads.
+	 *
+	 * @param string $text Input copy.
+	 * @return string Copy with markdown asterisks transformed to Unicode bold.
+	 */
+	public static function convert_markdown_bold_to_unicode( $text ) {
+		if ( false === strpos( $text, '**' ) ) {
+			return $text;
+		}
+
+		return (string) preg_replace_callback( '/\*\*([^*]+)\*\*/u', function( $matches ) {
+			$str = $matches[1];
+			$out = '';
+			$chars = preg_split( '//u', $str, -1, PREG_SPLIT_NO_EMPTY );
+			foreach ( $chars as $char ) {
+				$code = mb_ord( $char, 'UTF-8' );
+				if ( $code >= 65 && $code <= 90 ) {
+					$out .= mb_chr( 0x1D400 + ( $code - 65 ), 'UTF-8' );
+				} elseif ( $code >= 97 && $code <= 122 ) {
+					$out .= mb_chr( 0x1D41A + ( $code - 97 ), 'UTF-8' );
+				} elseif ( $code >= 48 && $code <= 57 ) {
+					$out .= mb_chr( 0x1D7CE + ( $code - 48 ), 'UTF-8' );
+				} else {
+					$out .= $char;
+				}
+			}
+			return $out;
+		}, $text );
 	}
 }

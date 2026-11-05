@@ -26,7 +26,7 @@ class VMSAI_Critic {
 
 YOUR STANDARDS:
 1. THE HOOK: Must be a bold, scroll-stopping statement.
-2. FORMATTING: Must use bolding (🚀 **TEXT**) and bullet points (✨) for readability. No blocks of plain text.
+2. FORMATTING: Must use bolding (🚀 𝐇𝐎𝐎𝐊) and bullet points (✨) for readability. NEVER use Markdown asterisks (**text**). No blocks of plain text.
 3. AUTHORITY: Must sound like a senior expert, not a chatbot.
 4. RELEVANCY: Image prompt must be a literal, concrete scene, not abstract gear.';
 
