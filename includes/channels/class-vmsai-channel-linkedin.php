@@ -65,7 +65,7 @@ class VMSAI_Channel_Linkedin extends VMSAI_Channel {
 	 */
 	public function test_connection() {
 		$response = VMSAI_Http::get(
-			self::API . '/me',
+			self::API . '/userinfo',
 			array( 'headers' => $this->headers(), 'scope' => 'channel.linkedin', 'retries' => 0 )
 		);
 
@@ -74,7 +74,7 @@ class VMSAI_Channel_Linkedin extends VMSAI_Channel {
 		}
 
 		$json = (array) ( $response['json'] ?? array() );
-		$name = sprintf( '%s %s', $json['localizedFirstName'] ?? '', $json['localizedLastName'] ?? '' );
+		$name = $json['name'] ?? trim( sprintf( '%s %s', $json['localizedFirstName'] ?? '', $json['localizedLastName'] ?? '' ) );
 		return array( 'ok' => true, 'message' => sprintf( /* translators: %s: user name */ __( 'Connected as %s.', 'vm-social-ai-pro' ), trim( $name ) ?: 'User' ) );
 	}
 
