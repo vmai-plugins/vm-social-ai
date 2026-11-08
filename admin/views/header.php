@@ -81,6 +81,22 @@ $vmsai_name  = $vmsai_is_wl ? 'Social Engine' : 'Social AI';
 
 <?php settings_errors( 'vmsai_settings' ); ?>
 
+<?php if ( ! empty( $_GET['vmsai_msg'] ) ) :
+	$vmsai_msgs = array(
+		'meta_connected'       => array( 'good', __( '✅ Meta (Facebook & Instagram) connected successfully via 1-Click OAuth!', 'vm-social-ai-pro' ) ),
+		'meta_failed'          => array( 'bad', __( '❌ Failed to connect Meta account. Please try again.', 'vm-social-ai-pro' ) ),
+		'meta_disconnected'    => array( 'warn', __( 'Meta account disconnected.', 'vm-social-ai-pro' ) ),
+		'youtube_connected'    => array( 'good', __( '✅ YouTube channel connected successfully via 1-Click OAuth!', 'vm-social-ai-pro' ) ),
+		'youtube_failed'       => array( 'bad', __( '❌ Failed to connect YouTube channel. Please try again.', 'vm-social-ai-pro' ) ),
+		'youtube_disconnected' => array( 'warn', __( 'YouTube account disconnected.', 'vm-social-ai-pro' ) ),
+	);
+	$vmsai_k = sanitize_key( wp_unslash( $_GET['vmsai_msg'] ) );
+	if ( isset( $vmsai_msgs[ $vmsai_k ] ) ) :
+		?>
+		<div class="vmsai-note vmsai-note--<?php echo esc_attr( $vmsai_msgs[ $vmsai_k ][0] ); ?>"><?php echo esc_html( $vmsai_msgs[ $vmsai_k ][1] ); ?></div>
+	<?php endif;
+endif; ?>
+
 <?php if ( isset( $_GET['saved'] ) && empty( get_settings_errors( 'vmsai_settings' ) ) ) : // phpcs:ignore WordPress.Security.NonceVerification ?>
 	<div class="vmsai-note vmsai-note--good"><?php esc_html_e( 'Saved.', 'vm-social-ai-pro' ); ?></div>
 <?php endif; ?>

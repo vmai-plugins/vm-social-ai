@@ -66,26 +66,151 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 			</div>
 
 			<div class="vmsai-fields">
-				<?php
-				foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :
-					if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) {
-						continue;
-					}
-					$vmsai_rendered_creds[] = $vmsai_field;
+				<?php if ( 'facebook' === $vmsai_slug || 'instagram' === $vmsai_slug ) :
+					$meta_profile = VMSAI_OAuth::meta_profile();
 				?>
+					<?php if ( $meta_profile['connected'] ) : ?>
+						<div class="vmsai-field vmsai-field--wide" style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.25); border-radius:10px; margin-bottom:12px;">
+							<div style="display:flex; align-items:center; gap:12px;">
+								<?php if ( 'instagram' === $vmsai_slug && ! empty( $meta_profile['ig_picture'] ) ) : ?>
+									<img src="<?php echo esc_url( $meta_profile['ig_picture'] ); ?>" style="width:36px; height:36px; border-radius:50%; border:2px solid #22c55e;">
+								<?php else : ?>
+									<div style="width:36px; height:36px; border-radius:50%; background:#1877f2; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700;">f</div>
+								<?php endif; ?>
+								<div>
+									<div style="font-weight:700; font-size:13px; color:#fff;">
+										<?php if ( 'instagram' === $vmsai_slug ) : ?>
+											<?php echo esc_html( $meta_profile['ig_username'] ? '@' . $meta_profile['ig_username'] : 'Instagram Business' ); ?>
+										<?php else : ?>
+											<?php echo esc_html( $meta_profile['fb_page_name'] ?: 'Facebook Page' ); ?>
+										<?php endif; ?>
+									</div>
+									<div style="font-size:11px; color:var(--muted);">1-Click OAuth Active · Permanent Token</div>
+								</div>
+							</div>
+							<a href="<?php echo esc_url( admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=meta_disconnect&nonce=' . wp_create_nonce( 'vmsai_meta_disconnect' ) ) ); ?>" class="vmsai-btn vmsai-btn--ghost" style="padding:4px 10px; font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);" onclick="return confirm('Disconnect Meta account?');">
+								Disconnect
+							</a>
+						</div>
+					<?php else : ?>
+						<div class="vmsai-field vmsai-field--wide" style="padding:16px 18px; background:rgba(24,119,242,0.06); border:1px solid rgba(24,119,242,0.25); border-radius:10px; margin-bottom:12px;">
+							<p style="margin:0 0 10px; font-size:12px; color:var(--text);">Connect your Page and Instagram Business Account automatically with permanent token generation.</p>
+							<a href="<?php echo esc_url( VMSAI_OAuth::meta_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;">
+								<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#fff" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+								<span>Connect Facebook & Instagram (1-Click OAuth)</span>
+							</a>
+						</div>
+					<?php endif; ?>
+
+					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;">
+						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Credentials (Developer Mode)</summary>
+						<div style="margin-top:10px;">
+							<?php
+							foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :
+								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) {
+									continue;
+								}
+								$vmsai_rendered_creds[] = $vmsai_field;
+								$vmsai_secret = (bool) preg_match( '/(token|secret|key)$/', $vmsai_field );
+								$vmsai_value  = $vmsai_secret ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field );
+							?>
+								<div class="vmsai-field" style="margin-top:8px;">
+									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_label ); ?></label>
+									<input type="<?php echo esc_attr( $vmsai_secret ? 'password' : 'text' ); ?>"
+										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
+										name="<?php echo esc_attr( $vmsai_field ); ?>"
+										autocomplete="off"
+										value="<?php echo esc_attr( $vmsai_value ); ?>">
+								</div>
+							<?php endforeach; ?>
+						</div>
+					</details>
+				<?php elseif ( 'youtube' === $vmsai_slug ) :
+					$yt_profile = VMSAI_OAuth::youtube_profile();
+				?>
+					<?php if ( $yt_profile['connected'] ) : ?>
+						<div class="vmsai-field vmsai-field--wide" style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.25); border-radius:10px; margin-bottom:12px;">
+							<div style="display:flex; align-items:center; gap:12px;">
+								<?php if ( ! empty( $yt_profile['channel_thumbnail'] ) ) : ?>
+									<img src="<?php echo esc_url( $yt_profile['channel_thumbnail'] ); ?>" style="width:36px; height:36px; border-radius:50%; border:2px solid #22c55e;">
+								<?php else : ?>
+									<div style="width:36px; height:36px; border-radius:50%; background:#ff0000; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700;">YT</div>
+								<?php endif; ?>
+								<div>
+									<div style="font-weight:700; font-size:13px; color:#fff;"><?php echo esc_html( $yt_profile['channel_title'] ); ?></div>
+									<div style="font-size:11px; color:var(--muted);">
+										YouTube Channel Active
+										<?php if ( $yt_profile['subscriber_count'] > 0 ) : ?>
+											· <?php echo esc_html( number_format( $yt_profile['subscriber_count'] ) ); ?> subscribers
+										<?php endif; ?>
+									</div>
+								</div>
+							</div>
+							<a href="<?php echo esc_url( admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_disconnect&nonce=' . wp_create_nonce( 'vmsai_youtube_disconnect' ) ) ); ?>" class="vmsai-btn vmsai-btn--ghost" style="padding:4px 10px; font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);" onclick="return confirm('Disconnect YouTube channel?');">
+								Disconnect
+							</a>
+						</div>
+					<?php else : ?>
+						<div class="vmsai-field vmsai-field--wide" style="padding:16px 18px; background:rgba(255,0,0,0.06); border:1px solid rgba(255,0,0,0.25); border-radius:10px; margin-bottom:12px;">
+							<p style="margin:0 0 10px; font-size:12px; color:var(--text);">Connect your YouTube channel in 1 click to publish YouTube Shorts automatically.</p>
+							<a href="<?php echo esc_url( VMSAI_OAuth::youtube_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;">
+								<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#fff" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+								<span>Connect YouTube Channel (1-Click OAuth)</span>
+							</a>
+						</div>
+					<?php endif; ?>
+
+					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;">
+						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Google OAuth Credentials</summary>
+						<div style="margin-top:10px;">
+							<?php
+							foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :
+								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) {
+									continue;
+								}
+								$vmsai_rendered_creds[] = $vmsai_field;
+								$vmsai_secret = (bool) preg_match( '/(token|secret|key)$/', $vmsai_field );
+								$vmsai_value  = $vmsai_secret ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field );
+							?>
+								<div class="vmsai-field" style="margin-top:8px;">
+									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_label ); ?></label>
+									<input type="<?php echo esc_attr( $vmsai_secret ? 'password' : 'text' ); ?>"
+										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
+										name="<?php echo esc_attr( $vmsai_field ); ?>"
+										autocomplete="off"
+										value="<?php echo esc_attr( $vmsai_value ); ?>">
+								</div>
+							<?php endforeach; ?>
+						</div>
+					</details>
+
 					<div class="vmsai-field">
-						<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_label ); ?></label>
-						<?php
-						$vmsai_secret = (bool) preg_match( '/(token|secret|key)$/', $vmsai_field );
-						$vmsai_value  = $vmsai_secret ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field );
-						?>
-						<input type="<?php echo esc_attr( $vmsai_secret ? 'password' : 'text' ); ?>"
-							id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
-							name="<?php echo esc_attr( $vmsai_field ); ?>"
-							autocomplete="off"
-							value="<?php echo esc_attr( $vmsai_value ); ?>">
+						<label for="vmsai-ffmpeg_path"><?php esc_html_e( 'ffmpeg path', 'vm-social-ai-pro' ); ?></label>
+						<input type="text" id="vmsai-ffmpeg_path" name="ffmpeg_path" value="<?php echo esc_attr( VMSAI_Settings::credential( 'ffmpeg_path' ) ); ?>" placeholder="/usr/bin/ffmpeg">
+						<p class="vmsai-hint"><?php esc_html_e( 'Leave blank to search the usual locations.', 'vm-social-ai-pro' ); ?></p>
 					</div>
-				<?php endforeach; ?>
+				<?php else : ?>
+					<?php
+					foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :
+						if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) {
+							continue;
+						}
+						$vmsai_rendered_creds[] = $vmsai_field;
+					?>
+						<div class="vmsai-field">
+							<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_label ); ?></label>
+							<?php
+							$vmsai_secret = (bool) preg_match( '/(token|secret|key)$/', $vmsai_field );
+							$vmsai_value  = $vmsai_secret ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field );
+							?>
+							<input type="<?php echo esc_attr( $vmsai_secret ? 'password' : 'text' ); ?>"
+								id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
+								name="<?php echo esc_attr( $vmsai_field ); ?>"
+								autocomplete="off"
+								value="<?php echo esc_attr( $vmsai_value ); ?>">
+						</div>
+					<?php endforeach; ?>
+				<?php endif; ?>
 
 				<?php if ( 'telegram' === $vmsai_slug ) : ?>
 					<div class="vmsai-field vmsai-field--wide" style="margin-top: 20px; padding: 20px; background: rgba(201, 162, 39, 0.05); border-radius: 12px; border: 1px solid var(--gold);">

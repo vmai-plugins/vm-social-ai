@@ -83,6 +83,36 @@ class VMSAI_Admin {
 	 * @return void
 	 */
 	public function maybe_redirect() {
+		if ( isset( $_GET['vmsai_oauth'] ) ) {
+			$oauth_action = sanitize_key( wp_unslash( $_GET['vmsai_oauth'] ) );
+
+			if ( 'meta_callback' === $oauth_action ) {
+				$res = VMSAI_OAuth::handle_meta_callback( $_GET );
+				$msg = is_wp_error( $res ) ? 'meta_failed' : 'meta_connected';
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=' . $msg ) . '#vmsai-section-channels' );
+				exit;
+			}
+
+			if ( 'meta_disconnect' === $oauth_action && isset( $_GET['nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'vmsai_meta_disconnect' ) ) {
+				VMSAI_OAuth::meta_disconnect();
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=meta_disconnected' ) . '#vmsai-section-channels' );
+				exit;
+			}
+
+			if ( 'youtube_callback' === $oauth_action ) {
+				$res = VMSAI_OAuth::handle_youtube_callback( $_GET );
+				$msg = is_wp_error( $res ) ? 'youtube_failed' : 'youtube_connected';
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=' . $msg ) . '#vmsai-section-channels' );
+				exit;
+			}
+
+			if ( 'youtube_disconnect' === $oauth_action && isset( $_GET['nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'vmsai_youtube_disconnect' ) ) {
+				VMSAI_OAuth::youtube_disconnect();
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=youtube_disconnected' ) . '#vmsai-section-channels' );
+				exit;
+			}
+		}
+
 		if ( isset( $_GET['page'] ) && in_array( sanitize_key( wp_unslash( $_GET['page'] ) ), array( 'vm-social-ai-channels', 'vm-social-ai' ), true ) ) {
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
 			exit;

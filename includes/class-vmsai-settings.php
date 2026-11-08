@@ -78,6 +78,15 @@ class VMSAI_Settings {
 			'telegram_owner_id'   => '',
 			'alert_on_failure'    => 1,
 			'alert_email'         => '',
+			'meta_connected'      => 0,
+			'fb_page_name'        => '',
+			'ig_username'         => '',
+			'ig_profile_picture'  => '',
+			'youtube_connected'   => 0,
+			'yt_channel_id'       => '',
+			'yt_channel_title'    => '',
+			'yt_channel_thumbnail'=> '',
+			'yt_subscriber_count' => 0,
 			// Off by default: the unstable channel installs whatever
 			// currently sits on the GitHub repo's mutable master branch
 			// rather than a maintainer-published Release. See
