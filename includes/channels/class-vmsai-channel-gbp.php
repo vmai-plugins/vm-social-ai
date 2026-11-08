@@ -61,22 +61,66 @@ class VMSAI_Channel_Gbp extends VMSAI_Channel {
 			return (string) $cached;
 		}
 
-		$response = VMSAI_Http::post(
-			self::TOKEN_URL,
-			array(
-				'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
-				'body'    => http_build_query(
+		$refresh = VMSAI_Settings::credential( 'google_refresh_token' );
+		if ( ! $refresh ) {
+			return '';
+		}
+
+		$client_id     = VMSAI_Settings::credential( 'google_client_id' );
+		$client_secret = VMSAI_Settings::credential( 'google_client_secret' );
+
+		if ( ! empty( $client_id ) && ! empty( $client_secret ) ) {
+			$response = VMSAI_Http::post(
+				self::TOKEN_URL,
+				array(
+					'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+					'body'    => http_build_query(
+						array(
+							'client_id'     => $client_id,
+							'client_secret' => $client_secret,
+							'refresh_token' => $refresh,
+							'grant_type'    => 'refresh_token',
+						)
+					),
+					'scope'   => 'channel.google',
+					'timeout' => 30,
+				)
+			);
+		} else {
+			// Connect Hub Broker mode for 1-Click OAuth
+			$response = VMSAI_Http::post(
+				'https://connect.vmstudio.digital/oauth/google/refresh',
+				array(
+					'headers' => array( 'Content-Type' => 'application/json' ),
+					'json'    => array(
+						'refresh_token' => $refresh,
+						'service'       => 'social',
+					),
+					'scope'   => 'channel.google',
+					'timeout' => 30,
+				)
+			);
+
+			// Fallback to direct token endpoint if client creds exist
+			if ( ( ! $response['ok'] || empty( $response['json']['access_token'] ) ) && ! empty( $client_id ) && ! empty( $client_secret ) ) {
+				$response = VMSAI_Http::post(
+					self::TOKEN_URL,
 					array(
-						'client_id'     => VMSAI_Settings::credential( 'google_client_id' ),
-						'client_secret' => VMSAI_Settings::credential( 'google_client_secret' ),
-						'refresh_token' => VMSAI_Settings::credential( 'google_refresh_token' ),
-						'grant_type'    => 'refresh_token',
+						'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+						'body'    => http_build_query(
+							array(
+								'client_id'     => $client_id,
+								'client_secret' => $client_secret,
+								'refresh_token' => $refresh,
+								'grant_type'    => 'refresh_token',
+							)
+						),
+						'scope'   => 'channel.google',
+						'timeout' => 30,
 					)
-				),
-				'scope'   => 'channel.google',
-				'timeout' => 30,
-			)
-		);
+				);
+			}
+		}
 
 		if ( ! $response['ok'] ) {
 			VMSAI_Logger::error( 'channel.google', 'Token refresh failed.', array( 'error' => $response['error'] ) );
