@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.17.3
+Stable tag: 1.19.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,12 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.19.0 =
+* Unified 1-Click Meta (Facebook Page & Instagram Business) OAuth authentication with permanent Page Access Token generation.
+* 1-Click YouTube Channel OAuth authentication with automatic channel details, avatar, and subscriber count discovery.
+* Dual-mode broker token refresh handling for seamless YouTube Shorts and GBP publishing without custom client credentials.
+* Redesigned Channels UI with live identity badges, official brand SVG connect buttons, and developer mode fallback.
 
 = 1.17.3 =
 * AI Engine Redesign: Introduced dedicated OmniRoute All-In-One Powerhouse Hub with unified credentials and 3-in-1 modality selectors (Text, Image, Video).
@@ -111,8 +117,6 @@ Failures are counted per provider. After a threshold the provider is benched for
 = Does it need ffmpeg? =
 
 Only for YouTube Shorts, which renders a vertical clip from the generated still. Everything else works without it.
-
-== Changelog ==
 
 = 1.0.0 =
 * First release.
