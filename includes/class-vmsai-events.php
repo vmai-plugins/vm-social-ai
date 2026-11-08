@@ -29,11 +29,17 @@ class VMSAI_Events {
 	 * Trigger on stock reduction to catch scarcity moments.
 	 */
 	public function on_stock_change( $product ) {
+		if ( ! function_exists( 'wc_get_product' ) ) {
+			return;
+		}
+
 		if ( ! is_object( $product ) ) {
 			$product = wc_get_product( $product );
 		}
 
-		if ( ! $product || 'publish' !== $product->get_status() ) return;
+		if ( ! is_a( $product, 'WC_Product' ) || 'publish' !== $product->get_status() ) {
+			return;
+		}
 
 		$stock = $product->get_stock_quantity();
 		$threshold = (int) apply_filters( 'vmsai_scarcity_threshold', 5 );
@@ -200,18 +206,12 @@ class VMSAI_Events {
 				);
 				$slot_id = $wpdb->insert_id;
 
-				// Immediately trigger instant composition if class exists so content is queued without waiting
-				if ( $slot_id && class_exists( 'VMSAI_Composer' ) ) {
-					$slot = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM `$plan_table` WHERE id = %d", $slot_id ), ARRAY_A );
-					if ( $slot ) {
-						try {
-							VMSAI_Composer::compose( $slot );
-						} catch ( \Throwable $t ) {
-							// Composer failures will naturally be retried by the scheduler
-						}
-					}
-				}
 			}
+		}
+
+		// Schedule a background tick to compose new slots without blocking the post save request.
+		if ( ! wp_next_scheduled( VMSAI_Install::CRON_TICK ) ) {
+			wp_schedule_single_event( time(), VMSAI_Install::CRON_TICK );
 		}
 
 		VMSAI_Logger::info( 'events', 'Site activity detected; injected new slots into the plan.', array( 'topic' => $topic ) );

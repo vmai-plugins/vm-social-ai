@@ -41,12 +41,9 @@ class VMSAI_Telegram_Bot {
 	 * @return bool
 	 */
 	public function verify_request( WP_REST_Request $request ) {
-		$secret = VMSAI_Settings::credential( 'telegram_webhook_secret' );
-		if ( ! $secret ) {
-			return true;
-		}
-		$sent = (string) $request->get_header( 'X-Telegram-Bot-Api-Secret-Token' );
-		return hash_equals( (string) $secret, $sent );
+		$secret = self::webhook_secret();
+		$sent   = (string) $request->get_header( 'X-Telegram-Bot-Api-Secret-Token' );
+		return ! empty( $sent ) && hash_equals( (string) $secret, $sent );
 	}
 
 	/**
@@ -151,11 +148,12 @@ class VMSAI_Telegram_Bot {
 			// Inject into immediate plan
 			VMSAI_Research::inject( $topic );
 
-			// Run the tick to compose it
-			$scheduler = new VMSAI_Scheduler();
-			$scheduler->tick();
+			// Trigger async background processing so Telegram webhook does not timeout (5s limit)
+			if ( ! wp_next_scheduled( VMSAI_Install::CRON_TICK ) ) {
+				wp_schedule_single_event( time(), VMSAI_Install::CRON_TICK );
+			}
 
-			$this->reply( $chat_id, "✅ <b>Drafted!</b> Check your War Room or wait for the approval alert." );
+			$this->reply( $chat_id, "✅ <b>Draft queued!</b> Composing in the background. Check your War Room or wait for the approval alert." );
 		}
 
 		return new WP_REST_Response( array( 'ok' => true ), 200 );

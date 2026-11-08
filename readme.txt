@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.19.0
+Stable tag: 1.19.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,12 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.19.1 =
+* Fixed Fatal Error in on_stock_change when WooCommerce is inactive by adding function_exists and WC_Product checks.
+* Fixed 504 Gateway Timeout during post publishing by replacing synchronous AI composition loops with async cron dispatch.
+* Fixed 504 Gateway Timeout during ComfyUI image rendering by capping polling deadline to 45s maximum.
+* Fixed Telegram webhook timeout loop and secret token bypass on freshly activated installations.
 
 = 1.19.0 =
 * Unified 1-Click Meta (Facebook Page & Instagram Business) OAuth authentication with permanent Page Access Token generation.

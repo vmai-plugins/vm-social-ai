@@ -171,8 +171,10 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 		// died mid-run instead of timing out gracefully. Cap the deadline to
 		// whatever headroom the process actually has (default 60s builds
 		// never reach the old 180s wall).
+		// Hard-cap polling to 45s maximum to prevent 504/524 gateway timeouts on reverse proxies
 		$budget   = (int) ini_get( 'max_execution_time' );
-		$deadline = time() + ( $budget > 0 ? max( 15, $budget - 10 ) : 60 );
+		$headroom = $budget > 0 ? max( 15, min( 45, $budget - 10 ) ) : 45;
+		$deadline = time() + $headroom;
 
 		while ( time() < $deadline ) {
 			sleep( 3 );

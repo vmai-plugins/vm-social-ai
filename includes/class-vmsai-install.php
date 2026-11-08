@@ -33,6 +33,9 @@ class VMSAI_Install {
 		self::create_tables();
 		self::create_roles();
 		self::seed_options();
+		if ( class_exists( 'VMSAI_Telegram_Bot' ) ) {
+			VMSAI_Telegram_Bot::webhook_secret();
+		}
 		self::schedule_events();
 		update_option( self::OPT_DB_VER, self::DB_VERSION, false );
 		set_transient( 'vmsai_activation_redirect', 1, 60 );
