@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.19.1
+Stable tag: 1.19.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,10 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.19.2 =
+* Fixed mutual infinite recursion loop between VM Social AI and VM SEO Brain credential resolution during wp-admin update checks.
+* Added static in-flight recursion guard with try-finally protection to VMSAI_Settings::credential().
 
 = 1.19.1 =
 * Fixed Fatal Error in on_stock_change when WooCommerce is inactive by adding function_exists and WC_Product checks.
