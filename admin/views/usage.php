@@ -15,8 +15,8 @@ $vmsai_license   = (array) get_option( 'vmsai_license', array( 'plan' => 'free',
 
 <section class="vmsai-panel">
 	<div class="vmsai-panel__head">
-		<h2 class="vmsai-display"><?php esc_html_e( 'Usage & Billing', 'vm-social-ai-pro' ); ?></h2>
-		<span class="vmsai-chip vmsai-chip--score"><?php echo esc_html( strtoupper( $vmsai_license['plan'] ) ); ?> PLAN</span>
+		<h2 class="vmsai-display"><?php esc_html_e( 'Usage & Telemetry', 'vm-social-ai-pro' ); ?></h2>
+		<span class="vmsai-chip vmsai-chip--score">100% FREE & UNLIMITED</span>
 	</div>
 
 	<div class="vmsai-grid vmsai-grid--split">
@@ -25,7 +25,7 @@ $vmsai_license   = (array) get_option( 'vmsai_license', array( 'plan' => 'free',
 
 			<dl class="vmsai-figures" style="margin-top: 20px;">
 				<div>
-					<dt><?php esc_html_e( 'Estimated Cost', 'vm-social-ai-pro' ); ?></dt>
+					<dt><?php esc_html_e( 'Estimated Value', 'vm-social-ai-pro' ); ?></dt>
 					<dd>$<?php echo number_format( (float) $vmsai_stats['total_cost'], 2 ); ?></dd>
 				</div>
 				<div>
@@ -41,25 +41,18 @@ $vmsai_license   = (array) get_option( 'vmsai_license', array( 'plan' => 'free',
 			<div class="vmsai-note vmsai-note--good" style="margin-top: 20px;">
 				<strong><?php esc_html_e( 'Value Created', 'vm-social-ai-pro' ); ?>:</strong>
 				<?php
-				$human_cost = (int) $vmsai_stats['total_calls'] * 15; // Estimating $15 per post for human agency work.
+				$human_cost = (int) $vmsai_stats['total_calls'] * 15;
 				printf( esc_html__( 'This content would have cost roughly $%s if produced by a traditional agency.', 'vm-social-ai-pro' ), number_format( $human_cost ) );
 				?>
 			</div>
 		</div>
 
 		<div class="vmsai-panel" style="background: var(--ink); border-color: var(--gold);">
-			<h3 class="vmsai-subhead" style="margin-top: 0;"><?php esc_html_e( 'Plugin Subscription', 'vm-social-ai-pro' ); ?></h3>
-			<p style="font-size: 13px; color: var(--muted);"><?php esc_html_e( 'Unlock advanced features like Viral Rescoring, News-Jacking, and multi-channel scheduling.', 'vm-social-ai-pro' ); ?></p>
-
-			<?php if ( 'free' === $vmsai_license['plan'] ) : ?>
-				<a href="https://vmstudio.digital/vm-social-ai/upgrade" target="_blank" class="vmsai-btn vmsai-btn--gold" style="width: 100%; text-align: center; margin-top: 10px;">
-					<?php esc_html_e( 'Upgrade to PRO', 'vm-social-ai-pro' ); ?>
-				</a>
-			<?php else : ?>
-				<div class="vmsai-note vmsai-note--good" style="margin-bottom: 0;">
-					<?php esc_html_e( 'Your PRO subscription is active.', 'vm-social-ai-pro' ); ?>
-				</div>
-			<?php endif; ?>
+			<h3 class="vmsai-subhead" style="margin-top: 0;"><?php esc_html_e( 'Zero-Cost Architecture', 'vm-social-ai-pro' ); ?></h3>
+			<p style="font-size: 13px; color: var(--muted);"><?php esc_html_e( 'Using self-hosted OmniRoute, Laptop 2 ComfyUI GPU, and open clusters, all modalities run without subscription or third-party fees.', 'vm-social-ai-pro' ); ?></p>
+			<div class="vmsai-note vmsai-note--good" style="margin-bottom: 0;">
+				<?php esc_html_e( 'All features and engines unlocked.', 'vm-social-ai-pro' ); ?>
+			</div>
 		</div>
 	</div>
 

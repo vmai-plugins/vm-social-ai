@@ -6,21 +6,6 @@
  */
 
 defined( 'ABSPATH' ) || exit;
-
-if ( ! VMSAI_License::has_feature( 'strategy_hub' ) ) :
-?>
-	<section class="vmsai-panel" style="text-align: center; padding: 120px 40px; background: linear-gradient(135deg, #14141a, #0b0b0f); border: 1px solid var(--gold); border-radius: 16px; position: relative; overflow: hidden;">
-		<div style="position: absolute; top: -50px; right: -50px; font-size: 200px; opacity: 0.05; transform: rotate(15deg);">🎯</div>
-		<div style="font-size: 60px; margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--gold));">🔒</div>
-		<h2 class="vmsai-display" style="font-size: 32px;">Strategic Intelligence is Locked</h2>
-		<p class="vmsai-lede" style="margin: 0 auto 30px; max-width: 500px;">The Keyword Heatmap, Pillar Gap Analysis, and Trend Scouting are Pro features designed for high-growth businesses ready to dominate their niche.</p>
-		<div style="display: flex; gap: 15px; justify-content: center;">
-			<a href="<?php echo esc_url( VMSAI_Admin::upgrade_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="padding: 15px 40px; font-size: 16px;">View Pro Pricing</a>
-		</div>
-	</section>
-<?php
-	return;
-endif;
 ?>
 
 <style>

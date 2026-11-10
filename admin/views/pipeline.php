@@ -6,21 +6,6 @@
  */
 
 defined( 'ABSPATH' ) || exit;
-
-if ( ! VMSAI_License::has_feature( 'production_pipeline' ) ) :
-?>
-	<section class="vmsai-panel" style="text-align: center; padding: 120px 40px; background: linear-gradient(135deg, #14141a, #0b0b0f); border: 1px solid var(--gold); border-radius: 16px; position: relative; overflow: hidden;">
-		<div style="position: absolute; top: -50px; right: -50px; font-size: 200px; opacity: 0.05; transform: rotate(15deg);">🏭</div>
-		<div style="font-size: 60px; margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--gold));">👑</div>
-		<h2 class="vmsai-display" style="font-size: 32px;">The Factory Floor is for Elite Users</h2>
-		<p class="vmsai-lede" style="margin: 0 auto 30px; max-width: 500px;">Track your AI agents, monitor production pulses, and manage social assets via the Kanban Pipeline. Elite Agency access required.</p>
-		<div style="display: flex; gap: 15px; justify-content: center;">
-			<a href="<?php echo esc_url( VMSAI_Admin::upgrade_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="padding: 15px 40px; font-size: 16px;">Go Elite</a>
-		</div>
-	</section>
-<?php
-	return;
-endif;
 ?>
 
 <style>

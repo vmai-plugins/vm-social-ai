@@ -217,15 +217,21 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 		$width  = (int) ( ! empty( $args['width'] ) ? min( 1024, max( 512, (int) $args['width'] ) ) : 512 );
 		$height = (int) ( ! empty( $args['height'] ) ? min( 1024, max( 512, (int) $args['height'] ) ) : 512 );
 
+		$prompt_json   = wp_json_encode( (string) $prompt );
+		$negative_val  = (string) ( $args['negative'] ?? 'text, watermark, logo, low quality, distorted, extra fingers' );
+		$negative_json = wp_json_encode( $negative_val );
+
 		$replacements = array(
-			'"{{seed}}"'   => $seed,
-			'{{seed}}'     => $seed,
-			'"{{width}}"'  => $width,
-			'{{width}}'    => $width,
-			'"{{height}}"' => $height,
-			'{{height}}'   => $height,
-			'{{prompt}}'   => $this->escape( $prompt ),
-			'{{negative}}' => $this->escape( (string) ( $args['negative'] ?? 'text, watermark, logo, low quality, distorted, extra fingers' ) ),
+			'"{{seed}}"'     => $seed,
+			'{{seed}}'       => $seed,
+			'"{{width}}"'    => $width,
+			'{{width}}'      => $width,
+			'"{{height}}"'   => $height,
+			'{{height}}'     => $height,
+			'"{{prompt}}"'   => $prompt_json,
+			'{{prompt}}'     => $prompt_json,
+			'"{{negative}}"' => $negative_json,
+			'{{negative}}'   => $negative_json,
 		);
 
 		$json = str_replace( array_keys( $replacements ), array_values( $replacements ), $raw );

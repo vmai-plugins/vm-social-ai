@@ -288,24 +288,15 @@ if ( $vmsai_streak_weeks > 0 && $vmsai_days_quiet >= 0 && $vmsai_days_quiet <= 7
 	<section class="vmsai-panel">
 		<div class="vmsai-panel__head">
 			<h3 class="vmsai-subhead" style="margin:0;">Executive ROI Synthesis</h3>
-			<?php if ( VMSAI_License::has_feature( 'executive_reporting' ) ) : ?>
-				<button class="vmsai-btn vmsai-btn--gold" style="padding: 4px 10px; font-size: 11px;" data-vmsai-action="generate-report">✨ Generate</button>
-			<?php endif; ?>
+			<button class="vmsai-btn vmsai-btn--gold" style="padding: 4px 10px; font-size: 11px;" data-vmsai-action="generate-report">✨ Generate</button>
 		</div>
 		<div id="vmsai-reporting-container">
-			<?php if ( VMSAI_License::has_feature( 'executive_reporting' ) ) : ?>
-				<div style="text-align: center; padding: 30px 0; color: var(--muted);" id="vmsai-reporting-empty">
-					<p style="font-size: 12px;">Click "Generate" for AI performance analysis.</p>
-				</div>
-				<div class="vmsai-report-body" id="vmsai-reporting-content" style="display:none;">
-					<div class="vmsai-executive-summary" id="vmsai-rep-text"></div>
-				</div>
-			<?php else : ?>
-				<div style="text-align: center; padding: 20px 0;">
-					<p class="vmsai-muted" style="font-size: 12px;">Monthly ROI Reports are an **Elite** feature.</p>
-					<a href="<?php echo esc_url( VMSAI_Admin::upgrade_url() ); ?>" style="font-size: 11px; color: var(--gold); text-decoration: none; font-weight: bold;">Upgrade Now →</a>
-				</div>
-			<?php endif; ?>
+			<div style="text-align: center; padding: 30px 0; color: var(--muted);" id="vmsai-reporting-empty">
+				<p style="font-size: 12px;">Click "Generate" for AI performance analysis.</p>
+			</div>
+			<div class="vmsai-report-body" id="vmsai-reporting-content" style="display:none;">
+				<div class="vmsai-executive-summary" id="vmsai-rep-text"></div>
+			</div>
 		</div>
 	</section>
 

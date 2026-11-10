@@ -25,9 +25,6 @@ $vmsai_name  = $vmsai_is_wl ? 'Social Engine' : 'Social AI';
 	<div class="vmsai-masthead__id">
 		<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
 			<span class="vmsai-eyebrow"><?php echo esc_html( $vmsai_brand ); ?></span>
-			<span class="vmsai-chip vmsai-chip--<?php echo esc_attr( $vmsai_plan ); ?>" style="font-size: 8px; padding: 2px 6px;">
-				<?php echo esc_html( strtoupper( $vmsai_plan ) ); ?>
-			</span>
 			<a href="<?php echo esc_url( VMSAI_Admin::url( 'settings' ) . '#vmsai-section-updates' ); ?>" class="vmsai-chip" style="font-size: 8px; padding: 2px 6px; text-decoration: none; color: var(--gold); border: 1px solid rgba(201,162,39,0.3); background: rgba(201,162,39,0.08);" title="<?php esc_attr_e( 'View GitHub Updates', 'vm-social-ai-pro' ); ?>">
 				v<?php echo esc_html( VMSAI_VERSION ); ?>
 			</a>

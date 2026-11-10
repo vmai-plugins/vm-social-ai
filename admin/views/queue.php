@@ -272,12 +272,10 @@ endif;
 <section class="vmsai-panel">
 	<div class="vmsai-nav-sub">
 		<a href="<?php echo esc_url( VMSAI_Admin::url( 'queue' ) ); ?>" class="<?php echo empty($_GET['view']) ? 'is-active' : ''; ?>"><?php esc_html_e( 'Review Queue', 'vm-social-ai-pro' ); ?></a>
-		<?php if ( VMSAI_License::has_feature( 'production_pipeline' ) ) : ?>
-			<a href="<?php echo esc_url( add_query_arg( 'view', 'pipeline', VMSAI_Admin::url( 'queue' ) ) ); ?>" class="<?php echo ($_GET['view'] ?? '') === 'pipeline' ? 'is-active' : ''; ?>"><?php esc_html_e( 'Production Pipeline', 'vm-social-ai-pro' ); ?></a>
-		<?php endif; ?>
+		<a href="<?php echo esc_url( add_query_arg( 'view', 'pipeline', VMSAI_Admin::url( 'queue' ) ) ); ?>" class="<?php echo ($_GET['view'] ?? '') === 'pipeline' ? 'is-active' : ''; ?>"><?php esc_html_e( 'Production Pipeline', 'vm-social-ai-pro' ); ?></a>
 	</div>
 
-	<?php if ( ($_GET['view'] ?? '') === 'pipeline' && VMSAI_License::has_feature( 'production_pipeline' ) ) : ?>
+	<?php if ( ($_GET['view'] ?? '') === 'pipeline' ) : ?>
 		<?php include VMSAI_PATH . 'admin/views/pipeline.php'; ?>
 	<?php else : ?>
 		<div class="vmsai-panel__head" style="margin-bottom: 30px;">

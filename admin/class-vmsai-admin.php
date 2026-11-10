@@ -470,19 +470,15 @@ class VMSAI_Admin {
 	private function save_channels() {
 		$post    = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification
 		$manager = vmsai()->channels();
-		$limits  = VMSAI_License::limits();
 
 		$enabled  = array();
 		$approval = array();
 		$creds    = array();
-		$count    = 0;
 
 		foreach ( $manager->all() as $slug => $channel ) {
-			$is_enabled = ! empty( $post['enabled'][ $slug ] );
-
-			if ( $is_enabled ) {
-				if ( $count < $limits['channels'] ) {
-					$enabled[ $slug ] = 1;
+			if ( ! empty( $post['enabled'][ $slug ] ) ) {
+				$enabled[ $slug ] = 1;
+			}
 					$count++;
 				} else {
 					// Plan limit reached, cannot enable more.
@@ -566,26 +562,6 @@ class VMSAI_Admin {
 				}
 			}
 			VMSAI_Settings::update_credentials( $credentials );
-		}
-	}
-
-	/**
-	 * Persist and verify license key from the plans tab.
-	 */
-	private function save_plans() {
-		$post = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification
-
-		if ( isset( $post['license_key'] ) ) {
-			$key = sanitize_text_field( $post['license_key'] );
-			$res = VMSAI_License::verify( $key );
-
-			if ( true !== $res && '' !== $key ) {
-				set_transient( 'vmsai_attempted_key', $key, 30 );
-				add_settings_error( 'vmsai_settings', 'license_invalid', $res );
-			} elseif ( true === $res && '' !== $key ) {
-				delete_transient( 'vmsai_attempted_key' );
-				add_settings_error( 'vmsai_settings', 'license_ok', __( 'License activated successfully.', 'vm-social-ai-pro' ), 'updated' );
-			}
 		}
 	}
 

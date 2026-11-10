@@ -19,9 +19,6 @@ $vmsai_level = VMSAI_Settings::get( 'log_level', 'info' );
 		<a href="<?php echo esc_url( VMSAI_Admin::url( 'channels' ) ); ?>"><?php esc_html_e( 'Social Channels ↗', 'vm-social-ai-pro' ); ?></a>
 	<?php endif; ?>
 	<a href="#vmsai-section-logs"><?php esc_html_e( 'System Logs', 'vm-social-ai-pro' ); ?></a>
-	<?php if ( current_user_can( 'vmsai_manage_keys' ) ) : ?>
-		<a href="#vmsai-section-plans"><?php esc_html_e( 'Plan &amp; Licence', 'vm-social-ai-pro' ); ?></a>
-	<?php endif; ?>
 	<a href="#vmsai-section-updates"><?php esc_html_e( 'Updates &amp; Sync', 'vm-social-ai-pro' ); ?></a>
 </div>
 
@@ -348,12 +345,6 @@ $vmsai_level = VMSAI_Settings::get( 'log_level', 'info' );
 <div id="vmsai-section-logs" class="vmsai-settings-section" style="display:none;">
 	<?php include VMSAI_PATH . 'admin/views/logs.php'; ?>
 </div>
-
-<?php if ( current_user_can( 'vmsai_manage_keys' ) ) : ?>
-	<div id="vmsai-section-plans" class="vmsai-settings-section" style="display:none;">
-		<?php include VMSAI_PATH . 'admin/views/plans.php'; ?>
-	</div>
-<?php endif; ?>
 
 <div id="vmsai-section-updates" class="vmsai-settings-section" style="display:none;">
 	<?php include VMSAI_PATH . 'admin/views/updates.php'; ?>
