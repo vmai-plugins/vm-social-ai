@@ -37,24 +37,26 @@ class VMSAI_Image_Cloudflare implements VMSAI_Image_Provider {
 	 * etc. — not just R2.
 	 */
 	public function is_configured() {
-		return '' !== VMSAI_Settings::credential( 'cf_token' ) && '' !== VMSAI_Settings::credential( 'r2_account_id' );
+		$account_id = VMSAI_Settings::credential( 'cf_account_id' ) ?: VMSAI_Settings::credential( 'r2_account_id' );
+		return '' !== VMSAI_Settings::credential( 'cf_token' ) && '' !== $account_id;
 	}
 
 	/**
 	 * Create an image.
 	 */
 	public function create( $prompt, array $args = array() ) {
-		$account_id = VMSAI_Settings::credential( 'r2_account_id' );
+		$account_id = VMSAI_Settings::credential( 'cf_account_id' ) ?: VMSAI_Settings::credential( 'r2_account_id' );
 		$token      = VMSAI_Settings::credential( 'cf_token' );
 
 		// Honour the model picked in the UI (list_models ids) so the list is
 		// not decorative. Full "@cf/..." ids pass through unchanged.
 		$model_key = (string) ( $args['model'] ?? '' );
 		$known     = array(
+			'flux-1-schnell'               => '@cf/black-forest-labs/flux-1-schnell',
 			'stable-diffusion-xl-lightning' => '@cf/bytedance/stable-diffusion-xl-lightning',
 			'stable-diffusion-xl-base-1.0'  => '@cf/stabilityai/stable-diffusion-xl-base-1.0',
 		);
-		$model = $known[ $model_key ] ?? ( $model_key ?: '@cf/bytedance/stable-diffusion-xl-lightning' );
+		$model = $known[ $model_key ] ?? ( $model_key ?: '@cf/black-forest-labs/flux-1-schnell' );
 
 		$url = "https://api.cloudflare.com/client/v4/accounts/{$account_id}/ai/run/{$model}";
 

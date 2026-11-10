@@ -216,7 +216,7 @@ class VMSAI_Settings {
 			'nvidia_key', 'nvidia_url',
 			'ollama_url', 'ollama_token',
 			'omniroute_url', 'omniroute_key',
-			'hf_token', 'cf_token', 'pollinations_token',
+			'hf_token', 'cf_token', 'cf_account_id', 'pollinations_token',
 			'comfyui_url', 'comfyui_token', 'comfyui_workflow',
 			'pexels_key', 'minimax_key', 'luma_key',
 			'heygen_key', 'heygen_avatar_id', 'heygen_voice_id',
