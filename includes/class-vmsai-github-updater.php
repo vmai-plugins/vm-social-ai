@@ -182,32 +182,29 @@ class VMSAI_Github_Updater {
 			}
 		}
 
-		// 2. Second attempt: an unsigned read of the raw plugin header
-		// straight off the mutable `master` branch. Unlike a Release (which
-		// requires the repo owner to take an explicit "publish" action),
-		// anyone who can push to master — or a compromised maintainer
-		// account/PAT — could get every site running this plugin to offer,
-		// and one-click install, whatever currently sits on that branch.
-		// Off by default; only probed when the operator explicitly opts in.
+		// 2. Second attempt: Check master branch if allow_unstable is enabled,
+		// or if the latest GitHub release is empty or older/equal to installed version.
 		$allow_unstable = (bool) VMSAI_Settings::get( 'github_allow_unstable_updates', false );
 
-		if ( empty( $latest_version ) && $allow_unstable ) {
+		if ( $allow_unstable || empty( $latest_version ) || version_compare( $latest_version, VMSAI_VERSION, '<=' ) ) {
 			$raw_file_url = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/' . self::GITHUB_BRANCH . '/vm-social-ai.php';
 			$raw_res      = wp_remote_get( $raw_file_url, array( 'headers' => $headers, 'timeout' => 15 ) );
 
 			if ( ! is_wp_error( $raw_res ) && 200 === wp_remote_retrieve_response_code( $raw_res ) ) {
 				$file_contents = wp_remote_retrieve_body( $raw_res );
 				if ( preg_match( '/^[ \t\/*#@]*Version:\s*(.+)$/m', $file_contents, $matches ) ) {
-					$latest_version = trim( $matches[1] );
-					$release_notes  = "Latest updates directly from GitHub master branch (unstable channel).";
+					$master_version = trim( $matches[1] );
+					if ( empty( $latest_version ) || version_compare( $master_version, $latest_version, '>' ) ) {
+						$latest_version = $master_version;
+						$release_notes  = "Latest updates and enhancements directly from GitHub master branch.";
+						$download_url   = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/' . self::GITHUB_BRANCH . '.zip';
+						$is_release     = false;
+					}
 				}
 			}
 		}
 
-		// Fallback download URL points directly to master archive — only
-		// reachable when the unstable-channel probe above actually set
-		// $latest_version, i.e. only when the operator opted in.
-		if ( empty( $download_url ) && $allow_unstable && $latest_version ) {
+		if ( empty( $download_url ) && $latest_version && version_compare( $latest_version, VMSAI_VERSION, '>' ) ) {
 			$download_url = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/' . self::GITHUB_BRANCH . '.zip';
 		}
 
