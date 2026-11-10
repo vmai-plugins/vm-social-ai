@@ -93,11 +93,21 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 							</a>
 						</div>
 					<?php else : ?>
+						<?php
+						$has_meta_app = ! empty( VMSAI_Settings::credential( 'meta_app_id' ) );
+						?>
 						<div class="vmsai-field vmsai-field--wide" style="padding:16px 18px; background:rgba(24,119,242,0.06); border:1px solid rgba(24,119,242,0.25); border-radius:10px; margin-bottom:12px;">
-							<p style="margin:0 0 10px; font-size:12px; color:var(--text);">Connect your Page and Instagram Business Account automatically with permanent token generation.</p>
-							<a href="<?php echo esc_url( VMSAI_OAuth::meta_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;">
+							<div style="font-weight:600; font-size:13px; margin-bottom:6px; color:#fff;">Automatic Meta Authentication (Facebook & Instagram)</div>
+							<p style="margin:0 0 12px; font-size:12px; color:var(--muted); line-height:1.5;">
+								<?php if ( $has_meta_app ) : ?>
+									Direct OAuth configured. Click below to authenticate via Facebook and automatically connect your Page and Instagram Business account.
+								<?php else : ?>
+									To authenticate with 1-click login, provide your free <strong>Meta App ID & Secret</strong> below under <em>Manual Credentials</em>. Alternatively, paste a <strong>Never-Expiring System User Token</strong> from Meta Business Suite for instant connection without app review.
+								<?php endif; ?>
+							</p>
+							<a href="<?php echo esc_url( VMSAI_OAuth::meta_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;" <?php echo ! $has_meta_app ? 'onclick="if (!confirm(\'No Meta App ID configured yet. Would you like to enter your Meta App ID or System User token in the settings below first?\')) return false;"' : ''; ?>>
 								<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#fff" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-								<span>Connect Facebook & Instagram (1-Click OAuth)</span>
+								<span><?php echo $has_meta_app ? 'Log in with Facebook (Direct OAuth)' : 'Connect Facebook & Instagram'; ?></span>
 							</a>
 						</div>
 					<?php endif; ?>
@@ -154,11 +164,21 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 							</a>
 						</div>
 					<?php else : ?>
+						<?php
+						$has_google_app = ! empty( VMSAI_Settings::credential( 'google_client_id' ) );
+						?>
 						<div class="vmsai-field vmsai-field--wide" style="padding:16px 18px; background:rgba(255,0,0,0.06); border:1px solid rgba(255,0,0,0.25); border-radius:10px; margin-bottom:12px;">
-							<p style="margin:0 0 10px; font-size:12px; color:var(--text);">Connect your YouTube channel in 1 click to publish YouTube Shorts automatically.</p>
-							<a href="<?php echo esc_url( VMSAI_OAuth::youtube_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;">
+							<div style="font-weight:600; font-size:13px; margin-bottom:6px; color:#fff;">Automatic Google Authentication (YouTube Shorts & GBP)</div>
+							<p style="margin:0 0 12px; font-size:12px; color:var(--muted); line-height:1.5;">
+								<?php if ( $has_google_app ) : ?>
+									Google OAuth credentials detected. Click below to log in directly via Google and authorize YouTube video publishing.
+								<?php else : ?>
+									To authenticate with 1-click Google login, add your <strong>Google OAuth Client ID & Secret</strong> below under <em>Manual Credentials</em>.
+								<?php endif; ?>
+							</p>
+							<a href="<?php echo esc_url( VMSAI_OAuth::youtube_connect_url() ); ?>" class="vmsai-btn vmsai-btn--gold" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:12px;" <?php echo ! $has_google_app ? 'onclick="if (!confirm(\'No Google OAuth Client ID configured yet. Would you like to enter your Google Client ID and Secret in the fields below first?\')) return false;"' : ''; ?>>
 								<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#fff" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-								<span>Connect YouTube Channel (1-Click OAuth)</span>
+								<span><?php echo $has_google_app ? 'Log in with Google (Direct OAuth)' : 'Connect YouTube Channel'; ?></span>
 							</a>
 						</div>
 					<?php endif; ?>

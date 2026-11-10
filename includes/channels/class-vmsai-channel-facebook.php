@@ -40,8 +40,10 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 	 */
 	public function credential_fields() {
 		return array(
-			'fb_page_id'    => __( 'Page ID', 'vm-social-ai-pro' ),
-			'fb_page_token' => __( 'Page access token (long-lived)', 'vm-social-ai-pro' ),
+			'fb_page_id'      => __( 'Facebook Page ID', 'vm-social-ai-pro' ),
+			'fb_page_token'   => __( 'Facebook Page Access Token (Never-Expiring System User Token recommended)', 'vm-social-ai-pro' ),
+			'meta_app_id'     => __( 'Meta App ID (optional, enables direct 1-Click OAuth login)', 'vm-social-ai-pro' ),
+			'meta_app_secret' => __( 'Meta App Secret (optional, enables direct 1-Click OAuth login)', 'vm-social-ai-pro' ),
 		);
 	}
 

@@ -46,10 +46,25 @@ class VMSAI_OAuth {
 		$state = hash( 'sha256', random_bytes( 32 ) . time() );
 		set_transient( 'vmsai_meta_oauth_state', $state, self::STATE_TTL );
 
+		$redirect_uri = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=meta_callback' );
+
+		// Direct App OAuth if App ID is configured
+		$app_id = VMSAI_Settings::credential( 'meta_app_id' );
+		if ( ! empty( $app_id ) ) {
+			$scopes = 'pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish';
+			return 'https://www.facebook.com/v21.0/dialog/oauth?' . http_build_query( array(
+				'client_id'     => $app_id,
+				'redirect_uri'  => $redirect_uri,
+				'state'         => $state,
+				'scope'         => $scopes,
+				'response_type' => 'code',
+			) );
+		}
+
 		$params = array(
 			'service'      => 'meta',
 			'site_url'     => home_url(),
-			'redirect_uri' => admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=meta_callback' ),
+			'redirect_uri' => $redirect_uri,
 			'state'        => $state,
 		);
 
@@ -92,6 +107,46 @@ class VMSAI_OAuth {
 		$ig_id      = isset( $params['ig_id'] ) ? sanitize_text_field( wp_unslash( $params['ig_id'] ) ) : '';
 		$ig_user    = isset( $params['ig_username'] ) ? sanitize_text_field( wp_unslash( $params['ig_username'] ) ) : '';
 		$ig_pic     = isset( $params['ig_picture'] ) ? esc_url_raw( wp_unslash( $params['ig_picture'] ) ) : '';
+
+		// If direct OAuth code was returned from Facebook
+		if ( empty( $page_token ) && empty( $params['user_token'] ) && ! empty( $params['code'] ) ) {
+			$code       = sanitize_text_field( wp_unslash( $params['code'] ) );
+			$app_id     = VMSAI_Settings::credential( 'meta_app_id' );
+			$app_secret = VMSAI_Settings::credential( 'meta_app_secret' );
+			$redirect   = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=meta_callback' );
+
+			if ( ! empty( $app_id ) && ! empty( $app_secret ) ) {
+				$token_res = VMSAI_Http::get(
+					self::META_GRAPH . '/oauth/access_token?' . http_build_query( array(
+						'client_id'     => $app_id,
+						'client_secret' => $app_secret,
+						'redirect_uri'  => $redirect,
+						'code'          => $code,
+					) ),
+					array( 'scope' => 'oauth.meta', 'retries' => 0 )
+				);
+
+				if ( $token_res['ok'] && ! empty( $token_res['json']['access_token'] ) ) {
+					$user_token = $token_res['json']['access_token'];
+
+					// Upgrade short-lived token to long-lived 60-day token
+					$long_res = VMSAI_Http::get(
+						self::META_GRAPH . '/oauth/access_token?' . http_build_query( array(
+							'grant_type'        => 'fb_exchange_token',
+							'client_id'         => $app_id,
+							'client_secret'     => $app_secret,
+							'fb_exchange_token' => $user_token,
+						) ),
+						array( 'scope' => 'oauth.meta', 'retries' => 0 )
+					);
+
+					if ( $long_res['ok'] && ! empty( $long_res['json']['access_token'] ) ) {
+						$user_token = $long_res['json']['access_token'];
+					}
+					$params['user_token'] = $user_token;
+				}
+			}
+		}
 
 		// If user token was passed instead of direct page token, resolve via Graph API
 		if ( empty( $page_token ) && ! empty( $params['user_token'] ) ) {
@@ -221,10 +276,27 @@ class VMSAI_OAuth {
 		$state = hash( 'sha256', random_bytes( 32 ) . time() );
 		set_transient( 'vmsai_google_oauth_state', $state, self::STATE_TTL );
 
+		$redirect_uri = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_callback' );
+
+		// Direct Google OAuth if Client ID is configured
+		$client_id = VMSAI_Settings::credential( 'google_client_id' );
+		if ( ! empty( $client_id ) ) {
+			$scopes = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/business.manage';
+			return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query( array(
+				'client_id'     => $client_id,
+				'redirect_uri'  => $redirect_uri,
+				'response_type' => 'code',
+				'scope'         => $scopes,
+				'access_type'   => 'offline',
+				'prompt'        => 'consent',
+				'state'         => $state,
+			) );
+		}
+
 		$params = array(
 			'service'      => 'youtube',
 			'site_url'     => home_url(),
-			'redirect_uri' => admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_callback' ),
+			'redirect_uri' => $redirect_uri,
 			'state'        => $state,
 		);
 
@@ -262,8 +334,38 @@ class VMSAI_OAuth {
 		}
 
 		$refresh = isset( $params['refresh_token'] ) ? sanitize_text_field( wp_unslash( $params['refresh_token'] ) ) : '';
+
+		// Direct OAuth from Google returning code
+		if ( empty( $refresh ) && ! empty( $params['code'] ) ) {
+			$code          = sanitize_text_field( wp_unslash( $params['code'] ) );
+			$client_id     = VMSAI_Settings::credential( 'google_client_id' );
+			$client_secret = VMSAI_Settings::credential( 'google_client_secret' );
+			$redirect_uri  = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_callback' );
+
+			if ( ! empty( $client_id ) && ! empty( $client_secret ) ) {
+				$res = VMSAI_Http::post( 'https://oauth2.googleapis.com/token', array(
+					'form' => array(
+						'client_id'     => $client_id,
+						'client_secret' => $client_secret,
+						'code'          => $code,
+						'grant_type'    => 'authorization_code',
+						'redirect_uri'  => $redirect_uri,
+					),
+				) );
+
+				if ( $res['ok'] && ! empty( $res['json']['refresh_token'] ) ) {
+					$refresh = $res['json']['refresh_token'];
+					$params['refresh_token'] = $refresh;
+					if ( ! empty( $res['json']['access_token'] ) ) {
+						$params['access_token'] = $res['json']['access_token'];
+						$params['expires_in']   = $res['json']['expires_in'] ?? 3600;
+					}
+				}
+			}
+		}
+
 		if ( empty( $refresh ) ) {
-			return new WP_Error( 'vmsai_oauth_token', __( 'No refresh token returned by Connect Hub.', 'vm-social-ai-pro' ) );
+			return new WP_Error( 'vmsai_oauth_token', __( 'No refresh token returned by Google authentication.', 'vm-social-ai-pro' ) );
 		}
 
 		// Store encrypted refresh token
