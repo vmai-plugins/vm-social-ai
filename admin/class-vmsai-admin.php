@@ -476,20 +476,7 @@ class VMSAI_Admin {
 		$creds    = array();
 
 		foreach ( $manager->all() as $slug => $channel ) {
-			if ( ! empty( $post['enabled'][ $slug ] ) ) {
-				$enabled[ $slug ] = 1;
-			}
-					$count++;
-				} else {
-					// Plan limit reached, cannot enable more.
-					$enabled[ $slug ] = 0;
-					/* translators: 1: channel label, 2: plan label, 3: channel limit */
-					add_settings_error( 'vmsai_settings', 'limit_reached', sprintf( __( 'Channel "%1$s" could not be enabled. Your %2$s plan is limited to %3$d channel(s).', 'vm-social-ai-pro' ), $channel->label(), $limits['label'], $limits['channels'] ) );
-				}
-			} else {
-				$enabled[ $slug ] = 0;
-			}
-
+			$enabled[ $slug ]  = ! empty( $post['enabled'][ $slug ] ) ? 1 : 0;
 			$approval[ $slug ] = ! empty( $post['approval'][ $slug ] ) ? 1 : 0;
 
 			foreach ( array_keys( $channel->credential_fields() ) as $field ) {
