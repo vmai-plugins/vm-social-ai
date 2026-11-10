@@ -971,7 +971,8 @@ class VMSAI_Video_Engine {
 			$audio_input = "-map {$in_idx}:a";
 			$in_idx++;
 		} else {
-			$audio_input = "-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -map {$in_idx}:a";
+			$inputs[] = "-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100";
+			$audio_input = "-map {$in_idx}:a";
 			$in_idx++;
 		}
 

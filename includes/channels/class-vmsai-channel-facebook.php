@@ -212,12 +212,9 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 		$video_id   = $res['json']['video_id'];
 		$upload_url = $res['json']['upload_url'];
 
-		// Phase 2: stream the binary to the rupload endpoint. Facebook's Reel
-		// protocol is a raw PUT with offset/file_size headers — NOT a form
-		// post (the old code discarded the session and posted the binary as
-		// a multipart field on /videos, which corrupted the upload).
+		// Phase 2: stream the binary to the rupload endpoint via POST.
 		$upload = VMSAI_Http::send_file(
-			'PUT',
+			'POST',
 			$upload_url,
 			$file,
 			array(
@@ -225,6 +222,7 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 				'file_url'      => $upload_url,
 				'offset'        => '0',
 				'file_size'     => (string) filesize( $file ),
+				'Content-Type'  => 'application/octet-stream',
 			),
 			'channel.facebook',
 			600
@@ -238,11 +236,12 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 		// the finish call below fails (the session can be finished by hand).
 		@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 
-		// Phase 3: finish the session with the description.
+		// Phase 3: finish the session with the description and publish state.
 		$finish = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode( $page_id ) . '/video_reels', array(
 			'json' => array(
 				'upload_phase' => 'finish',
 				'video_id'     => $video_id,
+				'video_state'  => 'PUBLISHED',
 				'description'  => $this->caption( $post ),
 				'access_token' => $token,
 			),
@@ -253,7 +252,8 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 			return $this->fail( $finish['error'] ?: __( 'Failed to finish Reel upload.', 'vm-social-ai-pro' ) );
 		}
 
-		return $this->ok( $video_id, 'https://www.facebook.com/' . $video_id );
+		$post_id = (string) ( $finish['json']['post_id'] ?? $video_id );
+		return $this->ok( $post_id, 'https://www.facebook.com/' . $post_id );
 	}
 
 	/**
