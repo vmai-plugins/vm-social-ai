@@ -61,7 +61,7 @@ class VMSAI_Channel_Instagram extends VMSAI_Channel {
 
 		// First test the User/Page permissions.
 		$response = VMSAI_Http::get(
-			self::GRAPH . '/me/permissions?access_token=' . $token,
+			self::GRAPH . '/me/permissions?access_token=' . rawurlencode( $token ),
 			array( 'scope' => 'channel.instagram', 'retries' => 0 )
 		);
 
@@ -86,7 +86,7 @@ class VMSAI_Channel_Instagram extends VMSAI_Channel {
 
 		// Now verify the account ID.
 		$verify = VMSAI_Http::get(
-			self::GRAPH . '/' . rawurlencode( $user_id ) . '?fields=username&access_token=' . $token,
+			self::GRAPH . '/' . rawurlencode( $user_id ) . '?fields=username&access_token=' . rawurlencode( $token ),
 			array( 'scope' => 'channel.instagram', 'retries' => 0 )
 		);
 
@@ -221,6 +221,14 @@ class VMSAI_Channel_Instagram extends VMSAI_Channel {
 			return $this->fail( __( 'Not enough valid slides for a carousel.', 'vm-social-ai-pro' ) );
 		}
 
+		// Await readiness for each child slide container before creating the parent CAROUSEL container.
+		// Instagram Graph API rejects carousel containers if any child item is still uploading or processing.
+		foreach ( $children as $child_id ) {
+			if ( ! $this->await_container( $child_id, $token ) ) {
+				return $this->fail( __( 'Child slide container processing timed out or failed.', 'vm-social-ai-pro' ) );
+			}
+		}
+
 		// 2. Create the carousel container
 		$container = VMSAI_Http::post( self::GRAPH . '/' . rawurlencode( $user_id ) . '/media', array(
 			'json' => array(
@@ -325,14 +333,15 @@ class VMSAI_Channel_Instagram extends VMSAI_Channel {
 	 * @return bool
 	 */
 	private function await_container( $creation_id, $token ) {
-		for ( $attempt = 0; $attempt < 12; $attempt++ ) {
-			sleep( 4 );
+		// Poll with backoff, bounded to ~20s max to prevent blocking the PHP worker thread.
+		for ( $attempt = 0; $attempt < 6; $attempt++ ) {
+			sleep( 2 );
 
 			$status = VMSAI_Http::get(
 				self::GRAPH . '/' . rawurlencode( $creation_id ) . '?' . http_build_query(
 					array( 'fields' => 'status_code', 'access_token' => $token )
 				),
-				array( 'scope' => 'channel.instagram', 'retries' => 0, 'timeout' => 20 )
+				array( 'scope' => 'channel.instagram', 'retries' => 0, 'timeout' => 10 )
 			);
 
 			$code = (string) ( $status['json']['status_code'] ?? '' );

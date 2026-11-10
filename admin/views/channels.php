@@ -102,8 +102,11 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 						</div>
 					<?php endif; ?>
 
-					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;">
-						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Credentials (Developer Mode)</summary>
+					<?php
+					$vmsai_fb_has_creds = ( ! empty( VMSAI_Settings::credential( 'fb_page_id' ) ) || ! empty( VMSAI_Settings::credential( 'fb_page_token' ) ) );
+					?>
+					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;" <?php echo $vmsai_fb_has_creds ? 'open' : ''; ?>>
+						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Credentials (Developer Mode) <?php echo $vmsai_fb_has_creds ? '<span style="color:#22c55e;">(Configured)</span>' : ''; ?></summary>
 						<div style="margin-top:10px;">
 							<?php
 							foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :
@@ -160,8 +163,11 @@ $vmsai_tg_webhook = rest_url('vm-social-ai/v1/telegram/webhook');
 						</div>
 					<?php endif; ?>
 
-					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;">
-						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Google OAuth Credentials</summary>
+					<?php
+					$vmsai_yt_has_creds = ( ! empty( VMSAI_Settings::credential( 'google_client_id' ) ) || ! empty( VMSAI_Settings::credential( 'google_refresh_token' ) ) );
+					?>
+					<details class="vmsai-field vmsai-field--wide" style="margin-bottom:10px;" <?php echo $vmsai_yt_has_creds ? 'open' : ''; ?>>
+						<summary style="cursor:pointer; font-size:11px; color:var(--muted); font-weight:600;">⚙️ Advanced: Manual Google OAuth Credentials <?php echo $vmsai_yt_has_creds ? '<span style="color:#22c55e;">(Configured)</span>' : ''; ?></summary>
 						<div style="margin-top:10px;">
 							<?php
 							foreach ( $vmsai_channel->credential_fields() as $vmsai_field => $vmsai_label ) :

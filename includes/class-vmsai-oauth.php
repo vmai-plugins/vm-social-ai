@@ -13,6 +13,22 @@ class VMSAI_OAuth {
 	/** Connect Hub Broker endpoint for zero-config 1-Click OAuth. */
 	const BROKER_URL = 'https://connect.vmstudio.digital';
 
+	/**
+	 * Get the active Broker URL (allows environment or setting override).
+	 *
+	 * @return string
+	 */
+	public static function broker_url() {
+		if ( defined( 'VMSAI_OAUTH_BROKER_URL' ) && VMSAI_OAUTH_BROKER_URL ) {
+			return untrailingslashit( VMSAI_OAUTH_BROKER_URL );
+		}
+		$override = VMSAI_Settings::get( 'oauth_broker_url' );
+		if ( ! empty( $override ) ) {
+			return untrailingslashit( $override );
+		}
+		return untrailingslashit( self::BROKER_URL );
+	}
+
 	/** Meta Graph API endpoint. */
 	const META_GRAPH = 'https://graph.facebook.com/v21.0';
 
@@ -37,7 +53,7 @@ class VMSAI_OAuth {
 			'state'        => $state,
 		);
 
-		return self::BROKER_URL . '/oauth/meta/start?' . http_build_query( $params );
+		return self::broker_url() . '/oauth/meta/start?' . http_build_query( $params );
 	}
 
 	/**
@@ -212,7 +228,7 @@ class VMSAI_OAuth {
 			'state'        => $state,
 		);
 
-		return self::BROKER_URL . '/oauth/google/start?' . http_build_query( $params );
+		return self::broker_url() . '/oauth/google/start?' . http_build_query( $params );
 	}
 
 	/**
@@ -277,12 +293,24 @@ class VMSAI_OAuth {
 	}
 
 	/**
+	 * Get Google access token, unified across Google services (GBP and YouTube).
+	 *
+	 * @return string
+	 */
+	public static function google_access_token() {
+		if ( class_exists( 'VMSAI_Channel_Gbp' ) ) {
+			return VMSAI_Channel_Gbp::access_token();
+		}
+		return (string) get_transient( 'vmsai_google_access_token' );
+	}
+
+	/**
 	 * Discover YouTube channel title and subscriber count.
 	 *
 	 * @return array|null
 	 */
 	public static function refresh_youtube_channel_profile() {
-		$token = VMSAI_Channel_Gbp::access_token();
+		$token = self::google_access_token();
 		if ( empty( $token ) ) {
 			return null;
 		}

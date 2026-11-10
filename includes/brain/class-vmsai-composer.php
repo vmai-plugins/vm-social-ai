@@ -249,11 +249,16 @@ KEY WRITING ATTRIBUTES:
 
 		$post_id = (int) ( $slot['post_id'] ?? 0 );
 		if ( $post_id && has_post_thumbnail( $post_id ) ) {
-			$img_path = get_attached_file( get_post_thumbnail_id( $post_id ) );
+			$thumb_id = get_post_thumbnail_id( $post_id );
+			$img_path = get_attached_file( $thumb_id );
 			if ( $img_path && file_exists( $img_path ) ) {
-				$gen_args['image_binary'] = file_get_contents( $img_path );
-				$gen_args['image_mime']   = get_post_mime_type( get_post_thumbnail_id( $post_id ) );
-				$prompt .= "\n\nCRITICAL: I have attached the actual image for this post. DESCRIBE exactly what you see in the image and weave those specific details into your caption to make it authentic.";
+				$filesize = filesize( $img_path );
+				// Safety: Only load image if under 5MB to avoid PHP memory exhaustion and timeout
+				if ( $filesize > 0 && $filesize <= 5 * 1024 * 1024 ) {
+					$gen_args['image_binary'] = file_get_contents( $img_path );
+					$gen_args['image_mime']   = get_post_mime_type( $thumb_id );
+					$prompt .= "\n\nCRITICAL: I have attached the actual image for this post. DESCRIBE exactly what you see in the image and weave those specific details into your caption to make it authentic.";
+				}
 			}
 		}
 

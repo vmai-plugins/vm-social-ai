@@ -39,8 +39,14 @@ class VMSAI_Inbox {
 		global $wpdb;
 		$table = VMSAI_Install::table( 'inbox' );
 
+		$channel   = (string) ( $item['channel'] ?? '' );
+		$remote_id = (string) ( $item['id'] ?? '' );
+		if ( empty( $channel ) || empty( $remote_id ) ) {
+			return 0;
+		}
+
 		// Check if we already have this interaction.
-		$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM `$table` WHERE channel = %s AND remote_id = %s", $item['channel'], $item['id'] ) );
+		$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM `$table` WHERE channel = %s AND remote_id = %s", $channel, $remote_id ) );
 		if ( $exists ) {
 			return 0;
 		}
@@ -58,10 +64,10 @@ class VMSAI_Inbox {
 		}
 
 		$wpdb->insert( $table, array(
-			'channel'         => $item['channel'],
-			'remote_id'       => $item['id'],
-			'author_name'     => $item['author'],
-			'content'         => $item['text'],
+			'channel'         => $channel,
+			'remote_id'       => $remote_id,
+			'author_name'     => (string) ( $item['author'] ?? '' ),
+			'content'         => (string) ( $item['text'] ?? '' ),
 			'status'          => 'pending',
 			'received_at'     => $received,
 			'created_at'      => current_time( 'mysql', true ),
@@ -74,7 +80,10 @@ class VMSAI_Inbox {
 	 * Automatically score an incoming interaction.
 	 */
 	private function auto_score( $id, $item ) {
-		$analysis = self::suggest_reply( $item['text'], $item['author'], $item['channel'] );
+		$text    = (string) ( $item['text'] ?? '' );
+		$author  = (string) ( $item['author'] ?? '' );
+		$channel = (string) ( $item['channel'] ?? '' );
+		$analysis = self::suggest_reply( $text, $author, $channel );
 
 		if ( $analysis['ok'] ) {
 			global $wpdb;

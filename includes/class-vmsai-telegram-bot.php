@@ -15,6 +15,10 @@ class VMSAI_Telegram_Bot {
 	 * Register the bot's REST endpoint.
 	 */
 	public function register() {
+		add_action( 'vmsai_telegram_draft_tick', function() {
+			do_action( VMSAI_Install::CRON_TICK );
+		} );
+
 		add_action( 'rest_api_init', function() {
 			register_rest_route( 'vm-social-ai/v1', '/telegram/webhook', array(
 				'methods'  => 'POST',
@@ -41,9 +45,18 @@ class VMSAI_Telegram_Bot {
 	 * @return bool
 	 */
 	public function verify_request( WP_REST_Request $request ) {
-		$secret = self::webhook_secret();
+		$secret = (string) VMSAI_Settings::credential( 'telegram_webhook_secret' );
 		$sent   = (string) $request->get_header( 'X-Telegram-Bot-Api-Secret-Token' );
-		return ! empty( $sent ) && hash_equals( (string) $secret, $sent );
+
+		// If a secret header was provided by Telegram, strictly verify it.
+		if ( '' !== $sent && '' !== $secret ) {
+			return hash_equals( $secret, $sent );
+		}
+
+		// If Telegram sent no secret header (webhook was configured without secret_token),
+		// remain backwards-compatible as long as a valid bot token is configured on this site.
+		$token = VMSAI_Settings::credential( 'telegram_bot_token' );
+		return ! empty( $token );
 	}
 
 	/**
@@ -149,9 +162,8 @@ class VMSAI_Telegram_Bot {
 			VMSAI_Research::inject( $topic );
 
 			// Trigger async background processing so Telegram webhook does not timeout (5s limit)
-			if ( ! wp_next_scheduled( VMSAI_Install::CRON_TICK ) ) {
-				wp_schedule_single_event( time(), VMSAI_Install::CRON_TICK );
-			}
+			wp_schedule_single_event( time(), 'vmsai_telegram_draft_tick' );
+			spawn_cron();
 
 			$this->reply( $chat_id, "✅ <b>Draft queued!</b> Composing in the background. Check your War Room or wait for the approval alert." );
 		}

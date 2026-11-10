@@ -65,7 +65,7 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 		// its ID works for classic Page tokens, System User tokens, and any
 		// User token that happens to have access to the page.
 		$me = VMSAI_Http::get(
-			self::GRAPH . '/' . rawurlencode( $id ) . '?fields=id,name,category&access_token=' . $token,
+			self::GRAPH . '/' . rawurlencode( $id ) . '?fields=id,name,category&access_token=' . rawurlencode( $token ),
 			array( 'scope' => 'channel.facebook', 'retries' => 0 )
 		);
 
@@ -82,7 +82,7 @@ class VMSAI_Channel_Facebook extends VMSAI_Channel {
 
 		// 2. Check permissions
 		$response = VMSAI_Http::get(
-			self::GRAPH . '/me/permissions?access_token=' . $token,
+			self::GRAPH . '/me/permissions?access_token=' . rawurlencode( $token ),
 			array( 'scope' => 'channel.facebook', 'retries' => 0 )
 		);
 

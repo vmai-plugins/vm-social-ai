@@ -4,7 +4,7 @@ Tags: social media, ai, automation, seo, instagram, facebook, linkedin, youtube
 Requires at least: 6.2
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.19.2
+Stable tag: 1.19.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,17 @@ VM Social AI plans, writes, illustrates, schedules and publishes social content 
 **Channels.** Facebook Pages, Instagram, X, LinkedIn organisation pages, Google Business Profile and YouTube Shorts.
 
 == Changelog ==
+
+= 1.19.3 =
+* Configurable OAuth Broker: Added dynamic broker URL resolution with environment constant (VMSAI_OAUTH_BROKER_URL) and settings override, decoupling GBP & YouTube token endpoints.
+* Instagram Carousel Reliability: Awaited readiness on all child slide containers prior to creating the parent CAROUSEL container, preventing premature publishing rejections.
+* Bounded Polling Loop: Capped Instagram container polling intervals to prevent PHP-FPM execution timeouts and 504 Gateway errors.
+* Telegram Bot Webhook Fix: Fixed 401 Unauthorized rejections when webhook was registered without secret_token header; enabled immediate async story drafting dispatch on /write commands.
+* GitHub Updater PHP 8.2+ Compatibility: Initialized transient response and no_update array structures to avoid undefined property warnings.
+* Memory Protection in Composer: Guarded vision image attachments with a 5MB size limit to prevent memory spikes on raw DSLR uploads.
+* Token URL Encoding: Enforced rawurlencode() on access tokens across Facebook and Instagram query strings to prevent token corruption with special characters (+ and /).
+* Inbox Webhook Null Safety: Added null coalescing on incoming interaction payloads to guard against missing keys in third-party webhook payloads.
+* Channels UI: Auto-expanded manual developer credential sections when credentials exist and added configuration badges.
 
 = 1.19.2 =
 * Fixed mutual infinite recursion loop between VM Social AI and VM SEO Brain credential resolution during wp-admin update checks.

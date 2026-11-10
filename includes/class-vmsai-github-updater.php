@@ -288,6 +288,14 @@ class VMSAI_Github_Updater {
 			$transient = new stdClass();
 		}
 
+		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+			$transient->response = array();
+		}
+
+		if ( ! isset( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+			$transient->no_update = array();
+		}
+
 		$info = $this->get_remote_info( false );
 
 		if ( ! empty( $info['has_update'] ) ) {

@@ -89,7 +89,7 @@ class VMSAI_Channel_Gbp extends VMSAI_Channel {
 		} else {
 			// Connect Hub Broker mode for 1-Click OAuth
 			$response = VMSAI_Http::post(
-				'https://connect.vmstudio.digital/oauth/google/refresh',
+				VMSAI_OAuth::broker_url() . '/oauth/google/refresh',
 				array(
 					'headers' => array( 'Content-Type' => 'application/json' ),
 					'json'    => array(
