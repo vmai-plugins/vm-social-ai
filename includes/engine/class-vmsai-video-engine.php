@@ -337,7 +337,8 @@ class VMSAI_Video_Engine {
 			VMSAI_Logger::warn( 'engine.video', "Provider $source failed.", array( 'error' => $res['error'] ) );
 		}
 
-		return array( 'ok' => false, 'binary' => '', 'error' => 'All video providers in chain failed.', 'tried' => $tried );
+		$last_error = ! empty( $tried ) ? end( $tried ) : 'Video generation failed.';
+		return array( 'ok' => false, 'binary' => '', 'error' => $last_error, 'tried' => $tried );
 	}
 
 	/**

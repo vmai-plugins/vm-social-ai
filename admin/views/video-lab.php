@@ -80,14 +80,14 @@ defined( 'ABSPATH' ) || exit;
 			<div id="vmsai-video-providers">
 				<?php
 				$providers = array(
-					'omniroute'    => array( 'label' => 'OmniRoute AI (Veo/Seedance)', 'type' => 'Free OmniRoute Hub', 'free' => true ),
-					'aipuffer'     => array( 'label' => 'AI Puffer (Veo)', 'type' => 'AIPKit / multi-model', 'free' => true ),
-					'pollinations' => array( 'label' => 'Pollinations AI', 'type' => 'Free / Keyless', 'free' => true ),
-					'cogvideox'    => array( 'label' => 'CogVideoX', 'type' => 'Hugging Face API', 'free' => true ),
-					'pexels'       => array( 'label' => 'Pexels Stock', 'type' => 'Stock Fallback', 'free' => true ),
-					'minimax'      => array( 'label' => 'Minimax (Hailuo)', 'type' => 'Cinematic / Paid', 'free' => false ),
-					'luma'         => array( 'label' => 'Luma Dream Machine', 'type' => 'Elite / Paid', 'free' => false ),
-					'svd'          => array( 'label' => 'Stable Video Diffusion', 'type' => 'Local GPU', 'free' => true ),
+					'omniroute'    => array( 'label' => 'OmniRoute AI (Veo/Seedance)', 'type' => 'Free OmniRoute Hub', 'badge' => 'RECOMMENDED' ),
+					'pexels'       => array( 'label' => 'Pexels Motion Stock', 'type' => 'Instant Stock Footage', 'badge' => 'INSTANT' ),
+					'pollinations' => array( 'label' => 'Pollinations AI', 'type' => 'Keyless Experimental', 'badge' => 'FREE' ),
+					'aipuffer'     => array( 'label' => 'AI Puffer (Veo)', 'type' => 'AIPKit Multi-Model', 'badge' => 'ACTIVE' ),
+					'cogvideox'    => array( 'label' => 'CogVideoX', 'type' => 'Hugging Face API', 'badge' => 'FREE' ),
+					'svd'          => array( 'label' => 'Stable Video Diffusion', 'type' => 'Local GPU Node', 'badge' => 'LOCAL' ),
+					'minimax'      => array( 'label' => 'Minimax (Hailuo)', 'type' => 'Cinematic Motion', 'badge' => 'API KEY' ),
+					'luma'         => array( 'label' => 'Luma Dream Machine', 'type' => 'Dream Machine Video', 'badge' => 'API KEY' ),
 				);
 				$current_provider = VMSAI_Settings::get( 'video_source', 'omniroute' );
 				foreach ( $providers as $slug => $p ) :
@@ -97,7 +97,7 @@ defined( 'ABSPATH' ) || exit;
 							<span class="vmsai-provider-name"><?php echo esc_html($p['label']); ?></span>
 							<span class="vmsai-provider-type"><?php echo esc_html($p['type']); ?></span>
 						</div>
-						<span class="vmsai-provider-badge <?php echo $p['free'] ? 'is-free' : ''; ?>"><?php echo $p['free'] ? 'FREE' : 'PAID'; ?></span>
+						<span class="vmsai-provider-badge is-free"><?php echo esc_html($p['badge']); ?></span>
 					</div>
 				<?php endforeach; ?>
 			</div>
@@ -162,11 +162,18 @@ defined( 'ABSPATH' ) || exit;
 		var $viewport = $('#vmsai-lab-video-viewport');
 		var $status = $('.vmsai-lab-status');
 
-		if (!prompt) return alert('Enter a concept first.');
+		if (!prompt) {
+			if (window.VMSAI && VMSAI.toast) {
+				VMSAI.toast('Please enter a concept first.', true);
+			} else {
+				alert('Please enter a concept first.');
+			}
+			return;
+		}
 
-		$btn.text('Producing...').prop('disabled', true);
+		$btn.text('Producing Asset...').prop('disabled', true);
 		$status.text('PRODUCING...').css('color', 'var(--gold)');
-		$('#vmsai-lab-placeholder').show().text('Generating frames...');
+		$('#vmsai-lab-placeholder').show().html('<div style="text-align:center"><div class="vmsai-spinner" style="margin: 0 auto 10px;"></div>Rendering cinematic asset via ' + $('[data-provider="' + activeProvider + '"] .vmsai-provider-name').text() + '...<br><span style="font-size:11px;color:var(--muted)">Synthesizing video motion frames...</span></div>');
 
 		VMSAI.api('/engine/test-video', 'POST', {
 			prompt: prompt,
@@ -178,11 +185,24 @@ defined( 'ABSPATH' ) || exit;
 			if (res.ok) {
 				$status.text('LIVE').css('color', 'var(--green)');
 				$('#vmsai-lab-placeholder').hide();
-				$viewport.html('<div class="vmsai-lab-status" style="color:var(--green); border-color:var(--green);">LIVE</div><video controls autoplay loop><source src="' + res.url + '" type="video/mp4"></video>');
+				$viewport.html('<div class="vmsai-lab-status" style="color:var(--green); border-color:var(--green);">LIVE</div><video controls autoplay loop playsinline style="width:100%;height:100%;object-fit:cover;"><source src="' + res.url + '" type="video/mp4"></video>');
+				if (window.VMSAI && VMSAI.toast) {
+					VMSAI.toast('Video created successfully!');
+				}
 			} else {
 				$status.text('FAILED').css('color', 'var(--red)');
-				$('#vmsai-lab-placeholder').text(res.message);
-				alert(res.message);
+				var errMsg = res.message || 'Video generation failed.';
+				$('#vmsai-lab-placeholder').html('<div style="color:var(--red);padding:24px;text-align:center;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><strong style="color:var(--parchment);font-size:13px;">' + errMsg + '</strong><p style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">Selected provider encountered an issue. Try selecting <strong>OmniRoute AI</strong> or <strong>Pexels Stock</strong> from the Video Engine sidebar for instant generation.</p></div>');
+				if (window.VMSAI && VMSAI.toast) {
+					VMSAI.toast(errMsg, true);
+				}
+			}
+		}).catch( function(err) {
+			$btn.text('🚀 Produce Elite Asset').prop('disabled', false);
+			$status.text('FAILED').css('color', 'var(--red)');
+			$('#vmsai-lab-placeholder').html('<div style="color:var(--red);padding:20px;text-align:center;">Network error communicating with video engine API.</div>');
+			if (window.VMSAI && VMSAI.toast) {
+				VMSAI.toast('Network error communicating with video engine.', true);
 			}
 		});
 	});

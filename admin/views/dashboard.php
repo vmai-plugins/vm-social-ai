@@ -109,25 +109,6 @@ endif;
 </style>
 
 <style>
-	/* Critical UI Fixes */
-	.vmsai-commander-toggle {
-		position: fixed !important; bottom: 30px !important; right: 30px !important;
-		width: 65px !important; height: 65px !important; z-index: 99999 !important;
-		background: var(--gold) !important; border-radius: 50% !important;
-		display: grid !important; place-items: center !important; cursor: pointer !important;
-		box-shadow: 0 8px 25px rgba(0,0,0,0.5) !important;
-	}
-	.vmsai-commander-toggle svg { width: 30px !important; height: 30px !important; fill: var(--ink) !important; }
-	.vmsai-commander-popup {
-		position: fixed !important; bottom: 110px !important; right: 30px !important;
-		width: 420px !important; max-width: calc(100vw - 60px) !important;
-		z-index: 99998 !important; border-radius: 16px !important; overflow: hidden !important;
-		box-shadow: 0 15px 50px rgba(0,0,0,0.7) !important; border: 1px solid var(--gold) !important;
-		display: flex !important; flex-direction: column !important;
-		background: var(--panel) !important; opacity: 0; visibility: hidden; transform: translateY(20px); transition: all 0.3s ease;
-	}
-	.vmsai-commander-popup.is-open { opacity: 1 !important; visibility: visible !important; transform: translateY(0) !important; }
-
 	/* Dashboard Components */
 	.vmsai-grid--four { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
 	.vmsai-stat-card {
@@ -161,30 +142,6 @@ endif;
 	.vmsai-executive-summary { font-size: 14px; color: #ccc; }
 	.vmsai-executive-summary p { margin-bottom: 15px; }
 </style>
-
-<!-- Floating Director -->
-<div class="vmsai-commander-toggle" id="vmsai-commander-toggle" title="Chat with Director">
-	<svg viewBox="0 0 24 24"><path d="M20,2H4c-1.1,0-2,0.9-2,2v18l4-4h14c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z"/></svg>
-</div>
-
-<section class="vmsai-commander-popup" id="vmsai-commander-popup">
-	<div style="padding: 20px; background: var(--ink); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--hairline);">
-		<h3 style="margin:0; font-size: 16px;">Strategic Director</h3>
-		<span class="vmsai-pill vmsai-pill--good">AI ACTIVE</span>
-	</div>
-	<div id="vmsai-commander-log" style="height: 350px; overflow-y: auto; padding: 20px; background: var(--ink); line-height: 1.5;">
-		<div style="margin-bottom: 15px;">
-			<span class="vmsai-director-avatar" style="width:24px; height:24px; font-size:10px; margin-bottom:5px;">SD</span>
-			<div style="background:var(--gold); color:var(--ink); padding:10px 14px; border-radius: 0 15px 15px 15px; font-size: 13px;">Ready for orders. How can I help you grow today?</div>
-		</div>
-	</div>
-	<div style="padding: 20px; background: var(--raised); border-top: 1px solid var(--hairline);">
-		<div style="display: flex; gap: 10px;">
-			<input type="text" id="vmsai-commander-input" placeholder="Type a command..." style="flex-grow: 1; border-radius: 20px; padding: 8px 15px;">
-			<button data-vmsai-action="commander-chat" class="vmsai-btn vmsai-btn--gold" style="border-radius: 50%; width: 38px; height: 38px; padding:0; display:grid; place-items:center;">🚀</button>
-		</div>
-	</div>
-</section>
 
 <!-- Streak + Weekly Pulse -->
 <?php
