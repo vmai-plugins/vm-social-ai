@@ -82,6 +82,7 @@ defined( 'ABSPATH' ) || exit;
 				$providers = array(
 					'omniroute'    => array( 'label' => 'OmniRoute AI (Veo/Seedance)', 'type' => 'Free OmniRoute Hub', 'badge' => 'RECOMMENDED' ),
 					'pexels'       => array( 'label' => 'Pexels Motion Stock', 'type' => 'Instant Stock Footage', 'badge' => 'INSTANT' ),
+					'comfyui'      => array( 'label' => 'ComfyUI (Laptop 2 / RTX 3060)', 'type' => 'Local GPU AnimateDiff', 'badge' => 'GPU NODE' ),
 					'pollinations' => array( 'label' => 'Pollinations AI', 'type' => 'Keyless Experimental', 'badge' => 'FREE' ),
 					'aipuffer'     => array( 'label' => 'AI Puffer (Veo)', 'type' => 'AIPKit Multi-Model', 'badge' => 'ACTIVE' ),
 					'cogvideox'    => array( 'label' => 'CogVideoX', 'type' => 'Hugging Face API', 'badge' => 'FREE' ),

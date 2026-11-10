@@ -70,9 +70,13 @@ $omni_video_models = VMSAI_Model_Sync::models( 'omniroute', 'video' );
 if ( empty( $omni_video_models ) ) {
 	$omni_video_models = array(
 		array( 'id' => 'pexels/instant-stock', 'label' => '🎥 Pexels HD Motion Stock (Instant Verified) · Recommended', 'is_free' => 1 ),
+		array( 'id' => 'comfyui/laptop2', 'label' => '🖥️ ComfyUI (Laptop 2 GPU Node · AnimateDiff)', 'is_free' => 1 ),
 		array( 'id' => 'veo-free/veo', 'label' => 'Google Veo Free (OmniRoute Hub)', 'is_free' => 1 ),
 		array( 'id' => 'veo-free/seedance', 'label' => 'ByteDance Seedance Free', 'is_free' => 1 ),
 	);
+} else {
+	array_unshift( $omni_video_models, array( 'id' => 'comfyui/laptop2', 'label' => '🖥️ ComfyUI (Laptop 2 GPU Node · AnimateDiff)', 'is_free' => 1 ) );
+	array_unshift( $omni_video_models, array( 'id' => 'pexels/instant-stock', 'label' => '🎥 Pexels HD Motion Stock (Instant Verified) · Recommended', 'is_free' => 1 ) );
 }
 
 // Full catalogue

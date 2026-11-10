@@ -420,10 +420,25 @@ class VMSAI_Admin {
 				array_unshift( $image_chain, 'omniroute' );
 			}
 
-			if ( ! in_array( 'omniroute', $video_chain, true ) ) array_unshift( $video_chain, 'omniroute' );
-			if ( empty( VMSAI_Settings::get( 'video_source' ) ) ) {
-				$default_vid = '' !== VMSAI_Settings::credential( 'pexels_key' ) ? 'pexels' : 'omniroute';
-				VMSAI_Settings::set( 'video_source', $default_vid );
+			$selected_vid_model = sanitize_text_field( $post['video_model']['omniroute'] ?? '' );
+			if ( 'comfyui' === $selected_vid_model || strpos( $selected_vid_model, 'comfyui' ) !== false ) {
+				$video_chain = array_values( array_diff( $video_chain, array( 'comfyui', 'pexels', 'omniroute' ) ) );
+				array_unshift( $video_chain, 'omniroute' );
+				array_unshift( $video_chain, 'pexels' );
+				array_unshift( $video_chain, 'comfyui' );
+				VMSAI_Settings::set( 'video_source', 'comfyui' );
+			} elseif ( 'pexels' === $selected_vid_model || strpos( $selected_vid_model, 'pexels' ) !== false ) {
+				$video_chain = array_values( array_diff( $video_chain, array( 'pexels', 'comfyui', 'omniroute' ) ) );
+				array_unshift( $video_chain, 'omniroute' );
+				array_unshift( $video_chain, 'comfyui' );
+				array_unshift( $video_chain, 'pexels' );
+				VMSAI_Settings::set( 'video_source', 'pexels' );
+			} else {
+				if ( ! in_array( 'omniroute', $video_chain, true ) ) array_unshift( $video_chain, 'omniroute' );
+				if ( empty( VMSAI_Settings::get( 'video_source' ) ) ) {
+					$default_vid = '' !== VMSAI_Settings::credential( 'pexels_key' ) ? 'pexels' : 'omniroute';
+					VMSAI_Settings::set( 'video_source', $default_vid );
+				}
 			}
 		}
 		VMSAI_Settings::update(
@@ -444,7 +459,7 @@ class VMSAI_Admin {
 
 		$credentials = array();
 
-		foreach ( array( 'openai_key', 'openai_image_url', 'omniroute_url', 'omniroute_key', 'aipuffer_site', 'aipuffer_key', 'aipuffer_bot_id', 'anthropic_key', 'gemini_key', 'openrouter_key', 'nvidia_key', 'nvidia_url', 'ollama_url', 'ollama_token', 'hf_token', 'cf_token', 'pollinations_token', 'comfyui_url', 'comfyui_token', 'comfyui_workflow', 'pexels_key', 'minimax_key', 'luma_key', 'heygen_key', 'heygen_avatar_id', 'heygen_voice_id', 'svd_url', 'elevenlabs_key', 'tavily_key' ) as $field ) {
+		foreach ( array( 'openai_key', 'openai_image_url', 'omniroute_url', 'omniroute_key', 'aipuffer_site', 'aipuffer_key', 'aipuffer_bot_id', 'anthropic_key', 'gemini_key', 'openrouter_key', 'nvidia_key', 'nvidia_url', 'ollama_url', 'ollama_token', 'hf_token', 'cf_token', 'pollinations_token', 'comfyui_url', 'comfyui_token', 'comfyui_workflow', 'comfyui_video_workflow', 'pexels_key', 'minimax_key', 'luma_key', 'heygen_key', 'heygen_avatar_id', 'heygen_voice_id', 'svd_url', 'elevenlabs_key', 'tavily_key' ) as $field ) {
 			if ( isset( $post[ $field ] ) ) {
 				$credentials[ $field ] = 'comfyui_workflow' === $field
 					? trim( (string) $post[ $field ] )

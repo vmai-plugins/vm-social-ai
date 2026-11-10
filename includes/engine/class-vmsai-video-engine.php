@@ -19,13 +19,14 @@ class VMSAI_Video_Engine {
 	 */
 	public function providers() {
 		return array(
+			'pexels'       => __( 'Pexels Motion Stock', 'vm-social-ai-pro' ),
+			'comfyui'      => __( 'ComfyUI (Laptop 2 / RTX 3060)', 'vm-social-ai-pro' ),
+			'omniroute'    => __( 'OmniRoute (Self-hosted)', 'vm-social-ai-pro' ),
 			'aipuffer'     => __( 'AI Puffer (Veo via AIPKit)', 'vm-social-ai-pro' ),
 			'minimax'      => __( 'Minimax / Hailuo AI', 'vm-social-ai-pro' ),
 			'luma'         => __( 'Luma Dream Machine', 'vm-social-ai-pro' ),
 			'heygen'       => __( 'HeyGen AI Avatar (Digital Twin)', 'vm-social-ai-pro' ),
 			'cogvideox'    => __( 'CogVideoX (HF)', 'vm-social-ai-pro' ),
-			'pexels'       => __( 'Pexels Stock', 'vm-social-ai-pro' ),
-			'omniroute'    => __( 'OmniRoute (Self-hosted)', 'vm-social-ai-pro' ),
 			'pollinations' => __( 'Pollinations (free)', 'vm-social-ai-pro' ),
 			'svd'          => __( 'Stable Video Diffusion', 'vm-social-ai-pro' ),
 		);
@@ -189,6 +190,7 @@ class VMSAI_Video_Engine {
 		switch ( $source ) {
 			case 'pollinations':
 			case 'pexels':
+			case 'comfyui':
 				return true;
 			case 'aipuffer':
 				return self::aipuffer_ready();
@@ -222,6 +224,8 @@ class VMSAI_Video_Engine {
 			return (string) $models[ $source ];
 		}
 		$known = array(
+			'pexels'       => 'stock-video',
+			'comfyui'      => 'animatediff-sd15',
 			'aipuffer'     => 'veo-3.0-fast-generate-preview',
 			'minimax'      => 'video-01',
 			'luma'         => 'dream-machine',
@@ -229,7 +233,6 @@ class VMSAI_Video_Engine {
 			'omniroute'    => 'veo-free/veo',
 			'cogvideox'    => 'cogvideox-5b',
 			'pollinations' => 'flux-video',
-			'pexels'       => 'stock-video',
 			'svd'          => 'stable-video-diffusion',
 		);
 		return $known[ $source ] ?? $source;
@@ -309,6 +312,7 @@ class VMSAI_Video_Engine {
 			if ( 'aipuffer' === $source )     $res = $this->from_aipuffer( $enriched_prompt );
 			elseif ( 'pollinations' === $source ) $res = $this->from_pollinations( $enriched_prompt );
 			elseif ( 'pexels' === $source )   $res = $this->from_pexels( $prompt );
+			elseif ( 'comfyui' === $source )  $res = $this->from_comfyui( $enriched_prompt );
 			elseif ( 'minimax' === $source )  $res = $this->from_minimax( $prompt );
 			elseif ( 'luma' === $source )     $res = $this->from_luma( $prompt );
 			elseif ( 'heygen' === $source )   $res = $this->from_heygen( $prompt );
@@ -555,6 +559,183 @@ class VMSAI_Video_Engine {
 			'binary' => $download['body'] ?? '',
 			'error'  => $download['error'],
 		);
+	}
+
+	/**
+	 * ComfyUI (Laptop 2 / Local GPU) AnimateDiff Video Pipeline.
+	 *
+	 * Uses AnimateDiff / VideoHelperSuite or an automated frame sequence workflow.
+	 *
+	 * @param string $prompt Enriched prompt text.
+	 * @return array{ok:bool,binary:string,error:string,url?:string}
+	 */
+	private function from_comfyui( $prompt ) {
+		$url = VMSAI_Settings::credential( 'comfyui_url' );
+		if ( empty( $url ) || strpos( $url, '100.107.' ) !== false || strpos( $url, '127.0.0.1' ) !== false ) {
+			$url = 'https://comfy.vmstudio.digital';
+		}
+		$base = untrailingslashit( $url );
+
+		$headers = array(
+			'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+			'Origin'     => $base,
+		);
+		$token = VMSAI_Settings::credential( 'comfyui_token' );
+		if ( ! empty( $token ) ) {
+			$headers['Authorization'] = 'Bearer ' . $token;
+		}
+
+		$raw_workflow = VMSAI_Settings::credential( 'comfyui_video_workflow' );
+		if ( empty( $raw_workflow ) ) {
+			$raw_workflow = '{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "dreamshaper_8.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "batch_size": 16,
+      "height": 512,
+      "width": 512
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["1", 1],
+      "text": "{{prompt}}"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["1", 1],
+      "text": "blurry, low quality, static, artifact, distorted, watermark, signature"
+    }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "cfg": 7,
+      "denoise": 1,
+      "latent_image": ["2", 0],
+      "model": ["1", 0],
+      "negative": ["4", 0],
+      "positive": ["3", 0],
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "seed": {{seed}},
+      "steps": 15
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["5", 0],
+      "vae": ["1", 2]
+    }
+  },
+  "7": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "crf": 20,
+      "format": "video/h264-mp4",
+      "frame_rate": 8,
+      "images": ["6", 0],
+      "loop_count": 0,
+      "pingpong": false,
+      "save_output": true,
+      "videopreview": { "hidden": false, "paused": false }
+    }
+  }
+}';
+		}
+
+		$seed = wp_rand( 1, 2147483647 );
+		$prompt_json = wp_json_encode( (string) $prompt );
+		$replacements = array(
+			'"{{seed}}"'   => $seed,
+			'{{seed}}'     => $seed,
+			'"{{prompt}}"' => $prompt_json,
+			'{{prompt}}'   => $prompt_json,
+		);
+
+		$workflow_json = str_replace( array_keys( $replacements ), array_values( $replacements ), $raw_workflow );
+		$workflow_data = json_decode( $workflow_json, true );
+		if ( ! is_array( $workflow_data ) ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'ComfyUI video workflow JSON is invalid.' );
+		}
+
+		$client_id = 'vmsai-vid-' . wp_generate_password( 10, false );
+		$queued = VMSAI_Http::post(
+			$base . '/prompt',
+			array(
+				'headers' => $headers,
+				'json'    => array( 'prompt' => $workflow_data, 'client_id' => $client_id ),
+				'scope'   => 'engine.video.comfyui',
+				'retries' => 0,
+				'timeout' => 20,
+			)
+		);
+
+		if ( ! $queued['ok'] ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'ComfyUI queue error: ' . ( $queued['error'] ?: 'GPU node unreachable.' ) );
+		}
+
+		$prompt_id = (string) ( $queued['json']['prompt_id'] ?? '' );
+		if ( ! $prompt_id ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'ComfyUI did not return a prompt id.' );
+		}
+
+		// Poll for output video or gif/images
+		$budget   = (int) ini_get( 'max_execution_time' );
+		$headroom = $budget > 0 ? max( 20, min( 55, $budget - 10 ) ) : 50;
+		$deadline = time() + $headroom;
+		$file     = null;
+
+		while ( time() < $deadline ) {
+			sleep( 4 );
+			$history = VMSAI_Http::get(
+				$base . '/history/' . rawurlencode( $prompt_id ),
+				array( 'headers' => $headers, 'scope' => 'engine.video.comfyui', 'retries' => 0, 'timeout' => 15 )
+			);
+			if ( ! $history['ok'] ) continue;
+
+			$entry = $history['json'][ $prompt_id ] ?? array();
+			foreach ( (array) ( $entry['outputs'] ?? array() ) as $node ) {
+				$media_items = array_merge(
+					(array) ( $node['gifs'] ?? array() ),
+					(array) ( $node['videos'] ?? array() ),
+					(array) ( $node['images'] ?? array() )
+				);
+				foreach ( $media_items as $item ) {
+					if ( ! empty( $item['filename'] ) ) {
+						$file = array(
+							'filename'  => (string) $item['filename'],
+							'subfolder' => (string) ( $item['subfolder'] ?? '' ),
+							'type'      => (string) ( $item['type'] ?? 'output' ),
+						);
+						break 2;
+					}
+				}
+			}
+		}
+
+		if ( ! $file ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'Timed out waiting for ComfyUI video render on Laptop 2.' );
+		}
+
+		$view_url = $base . '/view?' . http_build_query( $file );
+		$binary   = VMSAI_Http::fetch_binary( $view_url, 60 );
+
+		if ( empty( $binary ) ) {
+			return array( 'ok' => false, 'binary' => '', 'error' => 'Could not download generated video from ComfyUI.' );
+		}
+
+		return array( 'ok' => true, 'binary' => $binary, 'url' => $view_url, 'error' => '' );
 	}
 
 	/**
