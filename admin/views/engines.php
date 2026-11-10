@@ -1,9 +1,9 @@
 <?php
 /**
- * View: AI Engines & Neural Backbone (Unified Redesign).
+ * View: AI Engines & Neural Backbone (Merged Single-Page Control Center).
  *
- * Combines OmniRoute Unified Gateway, Local ComfyUI GPU Node, and Custom Multi-Provider
- * Failover into a single cohesive, high-end control center with an integrated interactive Model Explorer.
+ * Merges OmniRoute Unified Gateway, Laptop 2 ComfyUI GPU Node, Direct Fallback Keys,
+ * and the Live Model Catalogue Explorer onto a single, zero-duplicate luxury control panel.
  *
  * @package VM_Social_AI
  */
@@ -15,18 +15,10 @@ $vmsai_text  = vmsai()->text_engine();
 $vmsai_image = vmsai()->image_engine();
 $vmsai_video = vmsai()->video_engine();
 
-// Saved chains
-$vmsai_chain  = (array) VMSAI_Settings::get( 'text_chain', array( 'omniroute', 'aipuffer', 'gemini' ) );
-$vmsai_ichain = (array) VMSAI_Settings::get( 'image_chain', array( 'omniroute', 'pollinations', 'gemini' ) );
-$vmsai_vchain = (array) VMSAI_Settings::get( 'video_chain', array( 'omniroute', 'pexels', 'aipuffer' ) );
-
-// Saved models
+// Saved settings
 $vmsai_model  = (array) VMSAI_Settings::get( 'text_model', array() );
 $vmsai_imodel = (array) VMSAI_Settings::get( 'image_model', array() );
 $vmsai_vmodel = (array) VMSAI_Settings::get( 'video_model', array() );
-
-// Engine preset
-$vmsai_preset = VMSAI_Settings::get( 'engine_preset', 'omniroute' );
 
 // Sync metadata
 $vmsai_sync = VMSAI_Model_Sync::state();
@@ -58,7 +50,7 @@ if ( empty( $omni_image_models ) ) {
 	);
 }
 
-// Ensure Laptop 2 ComfyUI is first in list if not already present
+// Ensure Laptop 2 ComfyUI is first in image list
 $has_laptop2 = false;
 foreach ( $omni_image_models as $m ) {
 	if ( ( $m['id'] ?? '' ) === 'comfyui/laptop2' ) {
@@ -85,78 +77,20 @@ if ( empty( $omni_video_models ) ) {
 
 // Full catalogue
 $all_synced_models = VMSAI_Model_Sync::all();
-
-// Provider credentials list for advanced mode
-$vmsai_rendered_creds = array( 'omniroute_url', 'omniroute_key' );
-$vmsai_creds = array(
-	'openai'       => array(
-		'openai_key'       => array( __( 'OpenAI API Key', 'vm-social-ai-pro' ), 'password', __( 'From platform.openai.com. Powers DALL-E 3.', 'vm-social-ai-pro' ) ),
-		'openai_image_url' => array( __( 'Custom Endpoint', 'vm-social-ai-pro' ), 'url', __( 'Optional reverse proxy or Azure OpenAI URL.', 'vm-social-ai-pro' ) ),
-	),
-	'aipuffer'     => array(
-		'aipuffer_site'   => array( __( 'AI Puffer site URL', 'vm-social-ai-pro' ), 'url', __( 'Leave blank to use this site.', 'vm-social-ai-pro' ) ),
-		'aipuffer_key'    => array( __( 'REST API key', 'vm-social-ai-pro' ), 'password', __( 'From AI Power settings.', 'vm-social-ai-pro' ) ),
-		'aipuffer_bot_id' => array( __( 'Chatbot ID', 'vm-social-ai-pro' ), 'text', __( 'Optional knowledge base bot ID.', 'vm-social-ai-pro' ) ),
-	),
-	'anthropic'    => array( 'anthropic_key' => array( __( 'Anthropic API Key', 'vm-social-ai-pro' ), 'password', __( 'From console.anthropic.com. Unlocks Claude 3.5.', 'vm-social-ai-pro' ) ) ),
-	'gemini'       => array( 'gemini_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'From Google AI Studio.', 'vm-social-ai-pro' ) ) ),
-	'openrouter'   => array( 'openrouter_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'Free models cost nothing per call.', 'vm-social-ai-pro' ) ) ),
-	'nvidia'       => array(
-		'nvidia_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'From build.nvidia.com.', 'vm-social-ai-pro' ) ),
-		'nvidia_url' => array( __( 'Custom endpoint', 'vm-social-ai-pro' ), 'url', __( 'Self-hosted NIM container.', 'vm-social-ai-pro' ) ),
-	),
-	'ollama'       => array(
-		'ollama_url'   => array( __( 'Server URL', 'vm-social-ai-pro' ), 'url', __( 'e.g. http://127.0.0.1:11434 on your VPS.', 'vm-social-ai-pro' ) ),
-		'ollama_token' => array( __( 'Bearer token', 'vm-social-ai-pro' ), 'password', '' ),
-	),
-	'pollinations' => array( 'pollinations_token' => array( __( 'Token', 'vm-social-ai-pro' ), 'password', __( 'Optional. Keyless by default.', 'vm-social-ai-pro' ) ) ),
-	'huggingface'  => array( 'hf_token' => array( __( 'Hugging Face Token', 'vm-social-ai-pro' ), 'password', __( 'From huggingface.co.', 'vm-social-ai-pro' ) ) ),
-	'cloudflare'   => array( 'cf_token' => array( __( 'Cloudflare API Token', 'vm-social-ai-pro' ), 'password', __( 'Needs Workers AI permissions.', 'vm-social-ai-pro' ) ) ),
-	'comfyui'      => array(
-		'comfyui_url'      => array( __( 'Server URL', 'vm-social-ai-pro' ), 'url', __( 'e.g. https://comfy.vmstudio.digital (Laptop 2 RTX 3060).', 'vm-social-ai-pro' ) ),
-		'comfyui_token'    => array( __( 'Bearer token', 'vm-social-ai-pro' ), 'password', '' ),
-		'comfyui_workflow' => array( __( 'Workflow JSON', 'vm-social-ai-pro' ), 'textarea', __( 'Leave blank to use the built-in DreamShaper 8 workflow.', 'vm-social-ai-pro' ) ),
-	),
-	'pexels'       => array( 'pexels_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'Pexels HD Video Stock key.', 'vm-social-ai-pro' ) ) ),
-	'minimax'      => array( 'minimax_key' => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From platform.minimaxi.com.', 'vm-social-ai-pro' ) ) ),
-	'luma'         => array( 'luma_key'    => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From lumalabs.ai.', 'vm-social-ai-pro' ) ) ),
-	'heygen'       => array(
-		'heygen_key'       => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From app.heygen.com.', 'vm-social-ai-pro' ) ),
-		'heygen_avatar_id' => array( __( 'Avatar ID', 'vm-social-ai-pro' ), 'text', '' ),
-		'heygen_voice_id'  => array( __( 'Voice ID', 'vm-social-ai-pro' ), 'text', '' ),
-	),
-	'svd'          => array( 'svd_url'     => array( __( 'Local SVD API URL', 'vm-social-ai-pro' ), 'url', '' ) ),
-	'elevenlabs'   => array( 'elevenlabs_key' => array( __( 'ElevenLabs API Key', 'vm-social-ai-pro' ), 'password', __( 'AI Voiceovers for Reels/Shorts.', 'vm-social-ai-pro' ) ) ),
-	'tavily'       => array( 'tavily_key' => array( __( 'Tavily API Key', 'vm-social-ai-pro' ), 'password', __( 'Deep news research for RAG.', 'vm-social-ai-pro' ) ) ),
-);
 ?>
 
 <style>
-	/* Unified AI Engine Studio Styling */
+	/* Single-Page Merged AI Control Center */
 	.vmsai-hub-header {
 		display: flex; justify-content: space-between; align-items: center;
-		padding: 20px 24px; background: linear-gradient(135deg, rgba(20,20,20,0.95), rgba(12,12,12,0.98));
+		padding: 22px 26px; background: linear-gradient(135deg, rgba(22,22,22,0.98), rgba(12,12,12,0.99));
 		border: 1px solid var(--hairline); border-radius: 12px; margin-bottom: 24px;
 		box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-	}
-	.vmsai-mode-pillbox {
-		display: inline-flex; background: rgba(0,0,0,0.4); border: 1px solid var(--hairline);
-		padding: 4px; border-radius: 8px; gap: 4px;
-	}
-	.vmsai-mode-btn {
-		background: transparent; color: var(--muted); border: none; padding: 8px 18px;
-		font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer;
-		display: inline-flex; align-items: center; gap: 8px; transition: all 160ms ease;
-	}
-	.vmsai-mode-btn:hover { color: var(--parchment); }
-	.vmsai-mode-btn.is-active {
-		background: var(--gold); color: #000; font-weight: 700;
-		box-shadow: 0 4px 12px rgba(201, 162, 39, 0.3);
 	}
 
 	.vmsai-gateway-card {
 		background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px;
-		padding: 20px 24px; margin-bottom: 24px; position: relative;
+		padding: 22px 24px; margin-bottom: 24px; position: relative;
 	}
 	.vmsai-gateway-grid {
 		display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px;
@@ -166,17 +100,17 @@ $vmsai_creds = array(
 	.vmsai-modality-triad {
 		display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;
 	}
-	@media (max-width: 1080px) { .vmsai-modality-triad { grid-template-columns: 1fr; } }
+	@media (max-width: 1100px) { .vmsai-modality-triad { grid-template-columns: 1fr; } }
 
 	.vmsai-engine-card {
 		background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px;
-		padding: 20px; display: flex; flex-direction: column; justify-content: space-between;
+		padding: 22px; display: flex; flex-direction: column; justify-content: space-between;
 		position: relative; transition: border-color 180ms ease, box-shadow 180ms ease;
 	}
 	.vmsai-engine-card:hover { border-color: var(--gold-soft); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 	.vmsai-engine-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 	.vmsai-engine-card__title { font-size: 15px; font-weight: 700; color: var(--parchment); margin: 0; display: flex; align-items: center; gap: 8px; }
-	.vmsai-engine-card__tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: rgba(34,197,94,0.15); color: #22c55e; }
+	.vmsai-engine-card__tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
 	.vmsai-engine-card__desc { font-size: 12px; color: var(--muted); margin: 0 0 16px; line-height: 1.45; min-height: 34px; }
 
 	.vmsai-engine-card select {
@@ -192,7 +126,25 @@ $vmsai_creds = array(
 	.vmsai-engine-card__footer { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--hairline); display: flex; align-items: center; justify-content: space-between; }
 	.vmsai-engine-card__feedback { margin-top: 10px; font-size: 11px; line-height: 1.4; display: none; }
 
-	/* Interactive Explorer Drawer */
+	/* Expandable Direct API Key Trays inside cards */
+	.vmsai-card-accordion {
+		margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--hairline);
+	}
+	.vmsai-card-accordion summary {
+		font-size: 11px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none;
+	}
+	.vmsai-card-accordion summary:hover { color: var(--gold); }
+	.vmsai-card-accordion__content {
+		margin-top: 10px; padding: 10px; background: var(--ink); border-radius: 6px; border: 1px solid var(--hairline);
+	}
+
+	/* Auxiliary & Settings Bar */
+	.vmsai-aux-section {
+		display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;
+	}
+	@media (max-width: 800px) { .vmsai-aux-section { grid-template-columns: 1fr; } }
+
+	/* Interactive Model Catalogue Explorer */
 	.vmsai-explorer-drawer {
 		background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px;
 		margin-bottom: 24px; overflow: hidden;
@@ -209,28 +161,23 @@ $vmsai_creds = array(
 	.vmsai-cat-table th, .vmsai-cat-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--hairline); }
 	.vmsai-cat-table th { background: rgba(0,0,0,0.3); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
 	.vmsai-cat-table tr:hover td { background: rgba(255,255,255,0.02); }
-
-	.vmsai-mode-section { display: none; }
-	.vmsai-mode-section.is-active { display: block; }
 </style>
 
 <div class="vmsai-hub-header">
 	<div>
 		<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--gold); font-weight:700; margin-bottom:4px;">
-			Neural Backbone & Generation Hub
+			Unified Neural Command Center
 		</div>
 		<h1 style="font-size:22px; font-weight:800; color:#fff; margin:0;">
-			AI Engines & Model Architecture
+			AI Engines & Model Pipeline
 		</h1>
 	</div>
-
-	<!-- Clear Architecture Switcher -->
-	<div class="vmsai-mode-pillbox" role="tablist">
-		<button type="button" class="vmsai-mode-btn <?php echo ( 'chains' !== $vmsai_preset ) ? 'is-active' : ''; ?>" data-mode="omniroute">
-			<span>🌟</span> OmniRoute Sovereign Hub (Recommended)
-		</button>
-		<button type="button" class="vmsai-mode-btn <?php echo ( 'chains' === $vmsai_preset ) ? 'is-active' : ''; ?>" data-mode="chains">
-			<span>⚙️</span> Custom Multi-Provider Failover (Advanced)
+	<div style="display:flex; gap:12px; align-items:center;">
+		<span class="vmsai-status vmsai-status--live">
+			● <?php echo count( $all_synced_models ); ?> Live Models Synced
+		</span>
+		<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-action="sync-models">
+			🔄 Sync Gateway
 		</button>
 	</div>
 </div>
@@ -239,591 +186,352 @@ $vmsai_creds = array(
 	<?php wp_nonce_field( 'vmsai_save' ); ?>
 	<input type="hidden" name="action" value="vmsai_save">
 	<input type="hidden" name="section" value="engines">
-	<input type="hidden" name="engine_preset" id="vmsai-engine-preset" value="<?php echo esc_attr( $vmsai_preset ); ?>">
+	<input type="hidden" name="engine_preset" value="omniroute">
 
-	<!-- ======================================================== -->
-	<!-- SECTION 1: OMNIROUTE SOVEREIGN HUB (RECOMMENDED)          -->
-	<!-- ======================================================== -->
-	<div id="section-omniroute" class="vmsai-mode-section <?php echo ( 'chains' !== $vmsai_preset ) ? 'is-active' : ''; ?>">
-		<!-- Gateway Configuration -->
-		<div class="vmsai-gateway-card">
-			<div style="display:flex; justify-content:space-between; align-items:center;">
-				<div>
-					<h2 style="font-size:16px; font-weight:700; color:#fff; margin:0 0 4px;">
-						⚡ OmniRoute Unified Gateway
-					</h2>
-					<p style="margin:0; font-size:12px; color:var(--muted);">
-						Your self-hosted neural gateway routing high-speed generation across all three core modalities without external API subscriptions.
-					</p>
-				</div>
-				<span class="vmsai-status <?php echo $omni_configured ? 'vmsai-status--live' : 'vmsai-status--down'; ?>">
-					<?php echo $omni_configured ? '● Connected (' . count( $all_synced_models ) . ' Models)' : '○ Unconfigured'; ?>
-				</span>
+	<!-- 1. Unified Gateway Hub -->
+	<div class="vmsai-gateway-card">
+		<div style="display:flex; justify-content:space-between; align-items:center;">
+			<div>
+				<h2 style="font-size:16px; font-weight:700; color:#fff; margin:0 0 4px;">
+					⚡ OmniRoute Gateway Hub
+				</h2>
+				<p style="margin:0; font-size:12px; color:var(--muted);">
+					Centralized neural gateway powering high-speed copy, illustrations, and motion video across 1,000+ pooled models at zero marginal cost.
+				</p>
 			</div>
-
-			<div class="vmsai-gateway-grid">
-				<div class="vmsai-field">
-					<label for="vmsai-omni-url"><strong>Gateway Endpoint URL</strong></label>
-					<input type="url" id="vmsai-omni-url" name="omniroute_url" data-vmsai-cred="1"
-						placeholder="http://127.0.0.1:20128/v1"
-						value="<?php echo esc_attr( $omni_url ); ?>" style="width: 100%;">
-					<p class="vmsai-hint">Local Docker gateway (<code>http://127.0.0.1:20128/v1</code>) or public URL (<code>https://ai.vmstudio.digital/v1</code>).</p>
-				</div>
-				<div class="vmsai-field">
-					<label for="vmsai-omni-key"><strong>OmniRoute Bearer API Key</strong></label>
-					<input type="password" id="vmsai-omni-key" name="omniroute_key" data-vmsai-cred="1"
-						placeholder="sk-..."
-						value="<?php echo esc_attr( VMSAI_Settings::mask( 'omniroute_key' ) ); ?>" style="width: 100%;">
-					<p class="vmsai-hint">Encrypted securely with site salts. Powers all modalities simultaneously.</p>
-				</div>
-			</div>
+			<span class="vmsai-status <?php echo $omni_configured ? 'vmsai-status--live' : 'vmsai-status--down'; ?>">
+				<?php echo $omni_configured ? '● Connected' : '○ Not Configured'; ?>
+			</span>
 		</div>
 
-		<!-- The 3 Core Modalities -->
-		<div class="vmsai-modality-triad">
-			<!-- 1. Text / Copywriting -->
-			<div class="vmsai-engine-card">
-				<div>
-					<div class="vmsai-engine-card__head">
-						<h3 class="vmsai-engine-card__title"><span>✍️</span> Copywriting & Captions</h3>
-						<span class="vmsai-engine-card__tag">TEXT</span>
-					</div>
-					<p class="vmsai-engine-card__desc">Drafts viral social hooks, carousel slides, captions, and hashtags.</p>
-
-					<label for="vmsai-omni-text-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
-						Active Text Model
-					</label>
-					<select id="vmsai-omni-text-model" name="text_model[omniroute]">
-						<?php foreach ( $omni_text_models as $m ) :
-							$mid = $m['model_id'] ?? $m['id'];
-							$sel = ( ($vmsai_model['omniroute'] ?? 'auto/best-coding') === $mid );
-						?>
-							<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
-								<?php echo esc_html( $m['label'] ?? $mid ); ?>
-							</option>
-						<?php endforeach; ?>
-					</select>
-
-					<ul class="vmsai-engine-card__specs">
-						<li><span>✓</span> Grok 4.6 / Gemini 2.5 Flash / DeepSeek V3</li>
-						<li><span>✓</span> Automatic markdown formatting</li>
-						<li><span>✓</span> High-speed streaming response</li>
-					</ul>
-				</div>
-
-				<div>
-					<div class="vmsai-engine-card__footer">
-						<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-provider" data-engine="text" data-provider="omniroute">
-							⚡ Test Text Engine
-						</button>
-					</div>
-					<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-text" aria-live="polite"></div>
-				</div>
+		<div class="vmsai-gateway-grid">
+			<div class="vmsai-field">
+				<label for="vmsai-omni-url"><strong>Gateway Endpoint URL</strong></label>
+				<input type="url" id="vmsai-omni-url" name="omniroute_url" data-vmsai-cred="1"
+					placeholder="http://127.0.0.1:20128/v1"
+					value="<?php echo esc_attr( $omni_url ); ?>" style="width: 100%;">
+				<p class="vmsai-hint">Local Docker gateway (<code>http://127.0.0.1:20128/v1</code>) or public reverse proxy (<code>https://ai.vmstudio.digital/v1</code>).</p>
 			</div>
-
-			<!-- 2. Image / Illustration (ComfyUI RTX 3060 Featured) -->
-			<div class="vmsai-engine-card" style="border-color: rgba(201,162,39,0.3);">
-				<div>
-					<div class="vmsai-engine-card__head">
-						<h3 class="vmsai-engine-card__title"><span>🎨</span> Visual Art & Graphics</h3>
-						<span class="vmsai-engine-card__tag" style="background:rgba(201,162,39,0.15); color:var(--gold);">LOCAL GPU / CLOUD</span>
-					</div>
-					<p class="vmsai-engine-card__desc">Creates photorealistic marketing artwork, illustrations, and ad graphics.</p>
-
-					<label for="vmsai-omni-img-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
-						Active Image Engine
-					</label>
-					<select id="vmsai-omni-img-model" name="image_model[omniroute]">
-						<?php foreach ( $omni_image_models as $m ) :
-							$mid = $m['model_id'] ?? $m['id'];
-							$sel = ( ($vmsai_imodel['omniroute'] ?? 'comfyui/laptop2') === $mid );
-						?>
-							<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
-								<?php echo esc_html( $m['label'] ?? $mid ); ?>
-							</option>
-						<?php endforeach; ?>
-					</select>
-
-					<ul class="vmsai-engine-card__specs">
-						<li><span>✓</span> <strong>Laptop 2 ComfyUI (RTX 3060)</strong>: 4-6s render</li>
-						<li><span>✓</span> Auto-ratio multiples of 64 (512x768 / 768x512)</li>
-						<li><span>✓</span> Cloud AI Horde (FLUX.1 Schnell / SDXL) fallback</li>
-					</ul>
-				</div>
-
-				<div>
-					<div class="vmsai-engine-card__footer">
-						<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-provider" data-engine="image" data-provider="comfyui">
-							⚡ Test ComfyUI GPU
-						</button>
-					</div>
-					<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-image" aria-live="polite"></div>
-				</div>
+			<div class="vmsai-field">
+				<label for="vmsai-omni-key"><strong>OmniRoute Bearer API Key</strong></label>
+				<input type="password" id="vmsai-omni-key" name="omniroute_key" data-vmsai-cred="1"
+					placeholder="sk-..."
+					value="<?php echo esc_attr( VMSAI_Settings::mask( 'omniroute_key' ) ); ?>" style="width: 100%;">
+				<p class="vmsai-hint">AES-256-GCM encrypted. Manages token pooling and model routing.</p>
 			</div>
-
-			<!-- 3. Video / Motion Lab (Pexels HD Stock Featured) -->
-			<div class="vmsai-engine-card">
-				<div>
-					<div class="vmsai-engine-card__head">
-						<h3 class="vmsai-engine-card__title"><span>🎬</span> Cinematic Motion Video</h3>
-						<span class="vmsai-engine-card__tag" style="background:rgba(59,130,246,0.15); color:#60a5fa;">VERIFIED LIVE</span>
-					</div>
-					<p class="vmsai-engine-card__desc">Produces vertical 9:16 reels, Shorts, and cinematic background footage.</p>
-
-					<label for="vmsai-omni-vid-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
-						Active Video Sourcing
-					</label>
-					<select id="vmsai-omni-vid-model" name="video_model[omniroute]">
-						<?php foreach ( $omni_video_models as $m ) :
-							$mid = $m['model_id'] ?? $m['id'];
-							$sel = ( ($vmsai_vmodel['omniroute'] ?? 'pexels/instant-stock') === $mid );
-						?>
-							<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
-								<?php echo esc_html( $m['label'] ?? $mid ); ?>
-							</option>
-						<?php endforeach; ?>
-					</select>
-
-					<ul class="vmsai-engine-card__specs">
-						<li><span>✓</span> <strong>Pexels HD Video Stock</strong>: Instant 3s rendering</li>
-						<li><span>✓</span> 1080p / 4K portrait 9:16 format</li>
-						<li><span>✓</span> Google Veo / Seedance API support</li>
-					</ul>
-				</div>
-
-				<div>
-					<div class="vmsai-engine-card__footer">
-						<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-video">
-							⚡ Test Video Engine
-						</button>
-					</div>
-					<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-video" aria-live="polite"></div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Interactive Model Explorer Drawer (Integrated & Actionable) -->
-		<div class="vmsai-explorer-drawer">
-			<div class="vmsai-explorer-drawer__head" id="vmsai-toggle-explorer">
-				<div style="display:flex; align-items:center; gap:10px;">
-					<span style="font-size:16px;">🔍</span>
-					<div>
-						<strong style="color:#fff; font-size:13px;">Live Model Catalogue Explorer</strong>
-						<span style="color:var(--muted); font-size:11px; margin-left:8px;">(<?php echo count( $all_synced_models ); ?> models synced from OmniRoute)</span>
-					</div>
-				</div>
-				<span style="color:var(--gold); font-size:11px; font-weight:600;" id="vmsai-explorer-indicator">▼ Click to Search & Browse Models</span>
-			</div>
-
-			<div class="vmsai-explorer-body" id="vmsai-explorer-panel">
-				<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
-					<div class="vmsai-cat-filter" style="display:flex; gap:8px;">
-						<input type="search" id="vmsai-cat-search" class="vmsai-input" placeholder="Search models by name or id (e.g. grok, gemini, flux)..." style="min-width:300px;">
-						<button type="button" class="vmsai-btn vmsai-btn--sm is-active" data-vmsai-filter="all">All</button>
-						<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="text">Text</button>
-						<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="image">Image</button>
-						<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="video">Video</button>
-					</div>
-					<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-action="sync-models">
-						🔄 Refresh Sync
-					</button>
-				</div>
-
-				<div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 8px;">
-					<table class="vmsai-cat-table">
-						<thead>
-							<tr>
-								<th>Modality</th>
-								<th>Model ID</th>
-								<th>Display Name</th>
-								<th>Provider</th>
-								<th>Action</th>
-							</tr>
-						</thead>
-						<tbody id="vmsai-cat-body">
-							<?php
-							$count = 0;
-							foreach ( $all_synced_models as $m ) :
-								if ( ++$count > 300 ) break;
-								$mod = $m['modality'] ?? 'text';
-								$mid = $m['model_id'] ?? $m['id'];
-								$lbl = $m['label'] ?? $mid;
-							?>
-								<tr data-modality="<?php echo esc_attr( $mod ); ?>" data-search="<?php echo esc_attr( strtolower( $mid . ' ' . $lbl ) ); ?>">
-									<td><span class="vmsai-engine-card__tag" style="font-size:9px;"><?php echo esc_html( strtoupper( $mod ) ); ?></span></td>
-									<td><code><?php echo esc_html( $mid ); ?></code></td>
-									<td><strong><?php echo esc_html( $lbl ); ?></strong></td>
-									<td><?php echo esc_html( $m['provider'] ?? 'omniroute' ); ?></td>
-									<td>
-										<button type="button" class="vmsai-btn vmsai-btn--sm vmsai-btn-use-model"
-											data-modality="<?php echo esc_attr( $mod ); ?>"
-											data-model-id="<?php echo esc_attr( $mid ); ?>"
-											data-model-label="<?php echo esc_attr( $lbl ); ?>"
-											style="padding:2px 8px; font-size:10px;">
-											Use as Active
-										</button>
-									</td>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				</div>
-			</div>
-		</div>
-
-		<div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 20px;">
-			<button type="submit" class="vmsai-btn vmsai-btn--gold" style="padding: 12px 36px; font-weight:700; font-size:14px;">
-				💾 Save AI Engines Configuration
-			</button>
 		</div>
 	</div>
 
-	<!-- ======================================================== -->
-	<!-- SECTION 2: CUSTOM MULTI-PROVIDER CHAINS (ADVANCED)       -->
-	<!-- ======================================================== -->
-	<div id="section-chains" class="vmsai-mode-section <?php echo ( 'chains' === $vmsai_preset ) ? 'is-active' : ''; ?>">
-		<!-- Chain 1: Words -->
-		<section class="vmsai-panel">
-			<div class="vmsai-panel__head">
-				<div>
-					<h2 class="vmsai-display"><?php esc_html_e( 'Text Engine — Direct Provider Failover', 'vm-social-ai-pro' ); ?></h2>
-					<p class="vmsai-lede"><?php esc_html_e( 'Failover chain for copywriting. Requests cascade down this list in order. Drag to reorder.', 'vm-social-ai-pro' ); ?></p>
+	<!-- 2. The 3 Core Modalities (Merged & De-duplicated) -->
+	<div class="vmsai-modality-triad">
+		<!-- Modality 1: Copywriting (Text) -->
+		<div class="vmsai-engine-card">
+			<div>
+				<div class="vmsai-engine-card__head">
+					<h3 class="vmsai-engine-card__title"><span>✍️</span> Copywriting Engine</h3>
+					<span class="vmsai-engine-card__tag" style="background:rgba(34,197,94,0.15); color:#22c55e;">TEXT</span>
 				</div>
-				<div class="vmsai-panel__tools">
-					<button type="button" class="vmsai-btn" data-vmsai-action="test-text"><?php esc_html_e( 'Test Text Chain', 'vm-social-ai-pro' ); ?></button>
-				</div>
-			</div>
+				<p class="vmsai-engine-card__desc">Generates viral social hooks, carousel slides, captions, and hashtags.</p>
 
-			<ol class="vmsai-chain" data-chain="text">
-				<?php
-				$vmsai_ordered = array_merge( $vmsai_chain, array_diff( array_keys( $vmsai_text->providers() ), $vmsai_chain ) );
-
-				foreach ( $vmsai_ordered as $vmsai_slug ) :
-					$vmsai_provider = $vmsai_text->provider( $vmsai_slug );
-					if ( ! $vmsai_provider ) continue;
-
-					$vmsai_on   = in_array( $vmsai_slug, $vmsai_chain, true );
-					$vmsai_list = VMSAI_Model_Sync::models( $vmsai_slug, 'text' );
+				<label for="vmsai-omni-text-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
+					Active Text Model
+				</label>
+				<select id="vmsai-omni-text-model" name="text_model[omniroute]">
+					<?php foreach ( $omni_text_models as $m ) :
+						$mid = $m['model_id'] ?? $m['id'];
+						$sel = ( ($vmsai_model['omniroute'] ?? 'auto/best-coding') === $mid );
 					?>
-					<li class="vmsai-chain__item<?php echo $vmsai_provider->is_configured() ? ' is-ready' : ''; ?>" draggable="true">
-						<div class="vmsai-chain__bar">
-							<span class="vmsai-chain__grip" aria-hidden="true">⠿</span>
-							<label class="vmsai-check">
-								<input type="checkbox" name="text_chain[]" value="<?php echo esc_attr( $vmsai_slug ); ?>" <?php checked( $vmsai_on ); ?>>
-								<span class="vmsai-chain__name"><?php echo esc_html( $vmsai_slug ); ?></span>
-							</label>
-							<span class="vmsai-chain__state">
-								<?php echo $vmsai_provider->is_configured() ? esc_html__( 'Configured', 'vm-social-ai-pro' ) : esc_html__( 'Needs setup', 'vm-social-ai-pro' ); ?>
-							</span>
-							<button type="button" class="vmsai-btn vmsai-btn--quiet vmsai-chain__test" data-vmsai-action="test-provider" data-engine="text" data-provider="<?php echo esc_attr( $vmsai_slug ); ?>" <?php disabled( ! $vmsai_provider->is_configured() ); ?>><?php esc_html_e( 'Test', 'vm-social-ai-pro' ); ?></button>
+						<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
+							<?php echo esc_html( $m['label'] ?? $mid ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+
+				<ul class="vmsai-engine-card__specs">
+					<li><span>✓</span> Grok 4.6 backend / Gemini 2.5 Flash / DeepSeek V3</li>
+					<li><span>✓</span> Automatic markdown social formatting</li>
+					<li><span>✓</span> Ultra-low latency streaming inference</li>
+				</ul>
+
+				<!-- Direct API Fallback Drawer -->
+				<details class="vmsai-card-accordion">
+					<summary>⚙️ Direct API Keys (Optional Fallback)</summary>
+					<div class="vmsai-card-accordion__content">
+						<div class="vmsai-field" style="margin-bottom:8px;">
+							<label style="font-size:11px;">Google Gemini API Key</label>
+							<input type="password" name="gemini_key" data-vmsai-cred="1" placeholder="AIzaSy..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'gemini_key' ) ); ?>" style="width:100%; font-size:11px;">
 						</div>
-
-						<div class="vmsai-chain__result" aria-live="polite"></div>
-
-						<div class="vmsai-chain__body">
-							<?php if ( $vmsai_list ) : ?>
-								<div class="vmsai-field">
-									<label for="vmsai-model-<?php echo esc_attr( $vmsai_slug ); ?>"><?php esc_html_e( 'Model', 'vm-social-ai-pro' ); ?></label>
-									<select id="vmsai-model-<?php echo esc_attr( $vmsai_slug ); ?>" name="text_model[<?php echo esc_attr( $vmsai_slug ); ?>]">
-										<option value=""><?php esc_html_e( 'Provider default', 'vm-social-ai-pro' ); ?></option>
-										<?php foreach ( $vmsai_list as $vmsai_model_item ) :
-											$v_id = $vmsai_model_item['model_id'] ?? $vmsai_model_item['id'];
-										?>
-											<option value="<?php echo esc_attr( $v_id ); ?>" <?php selected( $vmsai_model[ $vmsai_slug ] ?? '', $v_id ); ?>>
-												<?php
-												echo esc_html( $vmsai_model_item['label'] );
-												echo ! empty( $vmsai_model_item['is_free'] ) ? ' · ' . esc_html__( 'free', 'vm-social-ai-pro' ) : '';
-												?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								</div>
-							<?php endif; ?>
-
-							<?php
-							foreach ( $vmsai_creds[ $vmsai_slug ] ?? array() as $vmsai_field => $vmsai_meta ) :
-								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) continue;
-								$vmsai_rendered_creds[] = $vmsai_field;
-							?>
-								<div class="vmsai-field">
-									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_meta[0] ); ?></label>
-									<input type="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? 'password' : ( 'textarea' === $vmsai_meta[1] ? 'text' : $vmsai_meta[1] ) ); ?>"
-										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
-										name="<?php echo esc_attr( $vmsai_field ); ?>" data-vmsai-cred="1"
-										autocomplete="off"
-										value="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field ) ); ?>">
-									<?php if ( $vmsai_meta[2] ) : ?>
-										<p class="vmsai-hint"><?php echo esc_html( $vmsai_meta[2] ); ?></p>
-									<?php endif; ?>
-								</div>
-							<?php endforeach; ?>
+						<div class="vmsai-field" style="margin-bottom:8px;">
+							<label style="font-size:11px;">Anthropic API Key (Claude 3.5)</label>
+							<input type="password" name="anthropic_key" data-vmsai-cred="1" placeholder="sk-ant-..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'anthropic_key' ) ); ?>" style="width:100%; font-size:11px;">
 						</div>
-					</li>
-				<?php endforeach; ?>
-			</ol>
-			<div id="vmsai-text-test" class="vmsai-testbox" aria-live="polite"></div>
-		</section>
-
-		<!-- Chain 2: Images -->
-		<section class="vmsai-panel">
-			<div class="vmsai-panel__head">
-				<div>
-					<h2 class="vmsai-display"><?php esc_html_e( 'Image Engine — Direct Artwork Failover', 'vm-social-ai-pro' ); ?></h2>
-					<p class="vmsai-lede"><?php esc_html_e( 'Failover chain for artwork. Laptop 2 ComfyUI GPU and cloud providers cascade down.', 'vm-social-ai-pro' ); ?></p>
-				</div>
-				<div class="vmsai-panel__tools">
-					<button type="button" class="vmsai-btn" data-vmsai-action="test-image"><?php esc_html_e( 'Test Image Chain', 'vm-social-ai-pro' ); ?></button>
-				</div>
+						<div class="vmsai-field">
+							<label style="font-size:11px;">OpenAI API Key (GPT-4o)</label>
+							<input type="password" name="openai_key" data-vmsai-cred="1" placeholder="sk-..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'openai_key' ) ); ?>" style="width:100%; font-size:11px;">
+						</div>
+					</div>
+				</details>
 			</div>
 
-			<ol class="vmsai-chain" data-chain="image">
-				<?php
-				$vmsai_iordered = array_merge( $vmsai_ichain, array_diff( array_keys( $vmsai_image->providers() ), $vmsai_ichain ) );
+			<div>
+				<div class="vmsai-engine-card__footer">
+					<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-provider" data-engine="text" data-provider="omniroute">
+						⚡ Test Text Engine
+					</button>
+				</div>
+				<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-text" aria-live="polite"></div>
+			</div>
+		</div>
 
-				foreach ( $vmsai_iordered as $vmsai_slug ) :
-					$vmsai_provider = $vmsai_image->providers()[ $vmsai_slug ] ?? null;
-					if ( ! $vmsai_provider ) continue;
+		<!-- Modality 2: Visual Art & Creative (Image) -->
+		<div class="vmsai-engine-card" style="border-color: rgba(201,162,39,0.35);">
+			<div>
+				<div class="vmsai-engine-card__head">
+					<h3 class="vmsai-engine-card__title"><span>🎨</span> Visual Art & Graphics</h3>
+					<span class="vmsai-engine-card__tag" style="background:rgba(201,162,39,0.15); color:var(--gold);">LOCAL GPU / CLOUD</span>
+				</div>
+				<p class="vmsai-engine-card__desc">Creates photorealistic marketing artwork, social banners, and illustrations.</p>
 
-					$vmsai_on   = in_array( $vmsai_slug, $vmsai_ichain, true );
-					$vmsai_ilist = VMSAI_Model_Sync::models( $vmsai_slug, 'image' );
+				<label for="vmsai-omni-img-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
+					Active Image Engine
+				</label>
+				<select id="vmsai-omni-img-model" name="image_model[omniroute]">
+					<?php foreach ( $omni_image_models as $m ) :
+						$mid = $m['model_id'] ?? $m['id'];
+						$sel = ( ($vmsai_imodel['omniroute'] ?? 'comfyui/laptop2') === $mid );
 					?>
-					<li class="vmsai-chain__item<?php echo $vmsai_provider->is_configured() ? ' is-ready' : ''; ?>" draggable="true">
-						<div class="vmsai-chain__bar">
-							<span class="vmsai-chain__grip" aria-hidden="true">⠿</span>
-							<label class="vmsai-check">
-								<input type="checkbox" name="image_chain[]" value="<?php echo esc_attr( $vmsai_slug ); ?>" <?php checked( $vmsai_on ); ?>>
-								<span class="vmsai-chain__name"><?php echo esc_html( $vmsai_slug ); ?></span>
-							</label>
-							<span class="vmsai-chain__state">
-								<?php echo $vmsai_provider->is_configured() ? esc_html__( 'Configured', 'vm-social-ai-pro' ) : esc_html__( 'Needs setup', 'vm-social-ai-pro' ); ?>
-							</span>
-							<button type="button" class="vmsai-btn vmsai-btn--quiet vmsai-chain__test" data-vmsai-action="test-provider" data-engine="image" data-provider="<?php echo esc_attr( $vmsai_slug ); ?>" <?php disabled( ! $vmsai_provider->is_configured() ); ?>><?php esc_html_e( 'Test', 'vm-social-ai-pro' ); ?></button>
+						<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
+							<?php echo esc_html( $m['label'] ?? $mid ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+
+				<ul class="vmsai-engine-card__specs">
+					<li><span>✓</span> <strong>Laptop 2 ComfyUI (RTX 3060)</strong>: 4-6s render</li>
+					<li><span>✓</span> Auto multiples of 64 (512x768 Portrait, 768x512 Landscape)</li>
+					<li><span>✓</span> AI Horde (FLUX.1 Schnell & SDXL) free cloud backup</li>
+				</ul>
+
+				<!-- ComfyUI Node Details & Direct Cloud Keys -->
+				<details class="vmsai-card-accordion" open>
+					<summary>💻 Local ComfyUI GPU Node Configuration</summary>
+					<div class="vmsai-card-accordion__content">
+						<div class="vmsai-field" style="margin-bottom:8px;">
+							<label style="font-size:11px;">ComfyUI Endpoint URL</label>
+							<input type="url" name="comfyui_url" data-vmsai-cred="1" placeholder="https://comfy.vmstudio.digital" value="<?php echo esc_attr( VMSAI_Settings::credential( 'comfyui_url', 'https://comfy.vmstudio.digital' ) ); ?>" style="width:100%; font-size:11px;">
+							<p class="vmsai-hint" style="font-size:10px; margin-top:2px;">Secured Cloudflare Tunnel routed to Laptop 2 RTX 3060.</p>
 						</div>
-
-						<div class="vmsai-chain__result" aria-live="polite"></div>
-
-						<div class="vmsai-chain__body">
-							<?php if ( $vmsai_ilist ) : ?>
-								<div class="vmsai-field">
-									<label for="vmsai-imodel-<?php echo esc_attr( $vmsai_slug ); ?>"><?php esc_html_e( 'Model', 'vm-social-ai-pro' ); ?></label>
-									<select id="vmsai-imodel-<?php echo esc_attr( $vmsai_slug ); ?>" name="image_model[<?php echo esc_attr( $vmsai_slug ); ?>]">
-										<option value=""><?php esc_html_e( 'Provider default', 'vm-social-ai-pro' ); ?></option>
-										<?php foreach ( $vmsai_ilist as $vmsai_model_item ) :
-											$v_id = $vmsai_model_item['model_id'] ?? $vmsai_model_item['id'];
-										?>
-											<option value="<?php echo esc_attr( $v_id ); ?>" <?php selected( $vmsai_imodel[ $vmsai_slug ] ?? '', $v_id ); ?>>
-												<?php
-												echo esc_html( $vmsai_model_item['label'] );
-												echo ! empty( $vmsai_model_item['is_free'] ) ? ' · ' . esc_html__( 'free', 'vm-social-ai-pro' ) : '';
-												?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								</div>
-							<?php endif; ?>
-
-							<?php
-							foreach ( $vmsai_creds[ $vmsai_slug ] ?? array() as $vmsai_field => $vmsai_meta ) :
-								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) continue;
-								$vmsai_rendered_creds[] = $vmsai_field;
-							?>
-								<div class="vmsai-field">
-									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_meta[0] ); ?></label>
-									<input type="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? 'password' : ( 'textarea' === $vmsai_meta[1] ? 'text' : $vmsai_meta[1] ) ); ?>"
-										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
-										name="<?php echo esc_attr( $vmsai_field ); ?>" data-vmsai-cred="1"
-										autocomplete="off"
-										value="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field ) ); ?>">
-									<?php if ( $vmsai_meta[2] ) : ?>
-										<p class="vmsai-hint"><?php echo esc_html( $vmsai_meta[2] ); ?></p>
-									<?php endif; ?>
-								</div>
-							<?php endforeach; ?>
+						<div class="vmsai-field">
+							<label style="font-size:11px;">Hugging Face Token (Optional)</label>
+							<input type="password" name="hf_token" data-vmsai-cred="1" placeholder="hf_..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'hf_token' ) ); ?>" style="width:100%; font-size:11px;">
 						</div>
-					</li>
-				<?php endforeach; ?>
-			</ol>
-			<div id="vmsai-image-test" class="vmsai-testbox" aria-live="polite"></div>
-		</section>
-
-		<!-- Chain 3: Video -->
-		<section class="vmsai-panel">
-			<div class="vmsai-panel__head">
-				<div>
-					<h2 class="vmsai-display"><?php esc_html_e( 'Video Engine — Direct Motion Sourcing', 'vm-social-ai-pro' ); ?></h2>
-					<p class="vmsai-lede"><?php esc_html_e( 'Produces short-form video for TikTok, YouTube Shorts, Instagram Reels and Facebook Reels.', 'vm-social-ai-pro' ); ?></p>
-				</div>
-				<div class="vmsai-panel__tools">
-					<button type="button" class="vmsai-btn" data-vmsai-action="test-video"><?php esc_html_e( 'Test Video Chain', 'vm-social-ai-pro' ); ?></button>
-				</div>
+					</div>
+				</details>
 			</div>
 
-			<ol class="vmsai-chain" data-chain="video">
-				<?php
-				$vmsai_vordered = array_merge( $vmsai_vchain, array_diff( array_keys( $vmsai_video->providers() ), $vmsai_vchain ) );
+			<div>
+				<div class="vmsai-engine-card__footer">
+					<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-provider" data-engine="image" data-provider="comfyui">
+						⚡ Test ComfyUI GPU
+					</button>
+				</div>
+				<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-image" aria-live="polite"></div>
+			</div>
+		</div>
 
-				foreach ( $vmsai_vordered as $vmsai_slug ) :
-					$vmsai_vmeta = $vmsai_video->providers()[ $vmsai_slug ] ?? null;
-					if ( ! $vmsai_vmeta ) continue;
+		<!-- Modality 3: Motion & Video Lab -->
+		<div class="vmsai-engine-card">
+			<div>
+				<div class="vmsai-engine-card__head">
+					<h3 class="vmsai-engine-card__title"><span>🎬</span> Cinematic Motion Video</h3>
+					<span class="vmsai-engine-card__tag" style="background:rgba(59,130,246,0.15); color:#60a5fa;">VERIFIED LIVE</span>
+				</div>
+				<p class="vmsai-engine-card__desc">Produces vertical 9:16 reels, Shorts, and cinematic background video clips.</p>
 
-					$vmsai_on    = in_array( $vmsai_slug, $vmsai_vchain, true );
-					$vmsai_vlist = VMSAI_Model_Sync::models( $vmsai_slug, 'video' );
+				<label for="vmsai-omni-vid-model" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;">
+					Active Video Sourcing
+				</label>
+				<select id="vmsai-omni-vid-model" name="video_model[omniroute]">
+					<?php foreach ( $omni_video_models as $m ) :
+						$mid = $m['model_id'] ?? $m['id'];
+						$sel = ( ($vmsai_vmodel['omniroute'] ?? 'pexels/instant-stock') === $mid );
 					?>
-					<li class="vmsai-chain__item<?php echo $vmsai_video->is_configured( $vmsai_slug ) ? ' is-ready' : ''; ?>" draggable="true">
-						<div class="vmsai-chain__bar">
-							<span class="vmsai-chain__grip" aria-hidden="true">⠿</span>
-							<label class="vmsai-check">
-								<input type="checkbox" name="video_chain[]" value="<?php echo esc_attr( $vmsai_slug ); ?>" <?php checked( $vmsai_on ); ?>>
-								<span class="vmsai-chain__name"><?php echo esc_html( $vmsai_slug ); ?></span>
-							</label>
-							<span class="vmsai-chain__state">
-								<?php echo $vmsai_video->is_configured( $vmsai_slug ) ? esc_html__( 'Configured', 'vm-social-ai-pro' ) : esc_html__( 'Needs setup', 'vm-social-ai-pro' ); ?>
-							</span>
-							<button type="button" class="vmsai-btn vmsai-btn--quiet vmsai-chain__test" data-vmsai-action="test-provider" data-engine="video" data-provider="<?php echo esc_attr( $vmsai_slug ); ?>" <?php disabled( ! $vmsai_video->is_configured( $vmsai_slug ) ); ?>><?php esc_html_e( 'Test', 'vm-social-ai-pro' ); ?></button>
+						<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
+							<?php echo esc_html( $m['label'] ?? $mid ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+
+				<ul class="vmsai-engine-card__specs">
+					<li><span>✓</span> <strong>Pexels HD Video Stock</strong>: Instant 3-second delivery</li>
+					<li><span>✓</span> 1080p / 4K portrait 9:16 aspect ratio</li>
+					<li><span>✓</span> Google Veo & ByteDance Seedance support</li>
+				</ul>
+
+				<!-- Direct Video Keys Accordion -->
+				<details class="vmsai-card-accordion">
+					<summary>⚙️ Video API Keys (Pexels / MiniMax / Luma)</summary>
+					<div class="vmsai-card-accordion__content">
+						<div class="vmsai-field" style="margin-bottom:8px;">
+							<label style="font-size:11px;">Pexels Stock API Key (Active)</label>
+							<input type="password" name="pexels_key" data-vmsai-cred="1" placeholder="Pexels Key..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'pexels_key' ) ); ?>" style="width:100%; font-size:11px;">
 						</div>
-
-						<div class="vmsai-chain__result" aria-live="polite"></div>
-
-						<div class="vmsai-chain__body">
-							<?php if ( $vmsai_vlist ) : ?>
-								<div class="vmsai-field">
-									<label for="vmsai-vmodel-<?php echo esc_attr( $vmsai_slug ); ?>"><?php esc_html_e( 'Model', 'vm-social-ai-pro' ); ?></label>
-									<select id="vmsai-vmodel-<?php echo esc_attr( $vmsai_slug ); ?>" name="video_model[<?php echo esc_attr( $vmsai_slug ); ?>]">
-										<option value=""><?php esc_html_e( 'Provider default', 'vm-social-ai-pro' ); ?></option>
-										<?php foreach ( $vmsai_vlist as $vmsai_model_item ) :
-											$v_id = $vmsai_model_item['model_id'] ?? $vmsai_model_item['id'];
-										?>
-											<option value="<?php echo esc_attr( $v_id ); ?>" <?php selected( $vmsai_vmodel[ $vmsai_slug ] ?? '', $v_id ); ?>>
-												<?php
-												echo esc_html( $vmsai_model_item['label'] );
-												echo ! empty( $vmsai_model_item['is_free'] ) ? ' · ' . esc_html__( 'free', 'vm-social-ai-pro' ) : '';
-												?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								</div>
-							<?php endif; ?>
-
-							<?php
-							foreach ( $vmsai_creds[ $vmsai_slug ] ?? array() as $vmsai_field => $vmsai_meta ) :
-								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) continue;
-								$vmsai_rendered_creds[] = $vmsai_field;
-							?>
-								<div class="vmsai-field">
-									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_meta[0] ); ?></label>
-									<input type="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? 'password' : ( 'textarea' === $vmsai_meta[1] ? 'text' : $vmsai_meta[1] ) ); ?>"
-										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
-										name="<?php echo esc_attr( $vmsai_field ); ?>" data-vmsai-cred="1"
-										autocomplete="off"
-										value="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field ) ); ?>">
-									<?php if ( $vmsai_meta[2] ) : ?>
-										<p class="vmsai-hint"><?php echo esc_html( $vmsai_meta[2] ); ?></p>
-									<?php endif; ?>
-								</div>
-							<?php endforeach; ?>
+						<div class="vmsai-field" style="margin-bottom:8px;">
+							<label style="font-size:11px;">MiniMax / Hailuo API Key</label>
+							<input type="password" name="minimax_key" data-vmsai-cred="1" placeholder="MiniMax Key..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'minimax_key' ) ); ?>" style="width:100%; font-size:11px;">
 						</div>
-					</li>
-				<?php endforeach; ?>
-			</ol>
-			<div id="vmsai-video-test" class="vmsai-testbox" aria-live="polite"></div>
-		</section>
+						<div class="vmsai-field">
+							<label style="font-size:11px;">Luma Dream Machine API Key</label>
+							<input type="password" name="luma_key" data-vmsai-cred="1" placeholder="Luma Key..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'luma_key' ) ); ?>" style="width:100%; font-size:11px;">
+						</div>
+					</div>
+				</details>
+			</div>
 
-		<!-- Auxiliary Intelligence (Voice & Deep Research) -->
-		<section class="vmsai-panel">
-			<div class="vmsai-panel__head">
+			<div>
+				<div class="vmsai-engine-card__footer">
+					<button type="button" class="vmsai-btn vmsai-btn--quiet" data-vmsai-action="test-video">
+						⚡ Test Video Engine
+					</button>
+				</div>
+				<div class="vmsai-engine-card__feedback vmsai-chain__result" id="omni-test-result-video" aria-live="polite"></div>
+			</div>
+		</div>
+	</div>
+
+	<!-- 3. Auxiliary Tools (Voiceover & Deep Research) -->
+	<div class="vmsai-aux-section">
+		<div class="vmsai-gateway-card" style="margin-bottom:0;">
+			<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+				<h3 style="margin:0; font-size:14px; color:#fff; display:flex; align-items:center; gap:8px;">
+					<span>🎙️</span> AI Voiceover Studio (ElevenLabs)
+				</h3>
+				<span class="vmsai-status <?php echo ! empty( VMSAI_Settings::credential( 'elevenlabs_key' ) ) ? 'vmsai-status--live' : 'vmsai-status--down'; ?>">
+					<?php echo ! empty( VMSAI_Settings::credential( 'elevenlabs_key' ) ) ? 'Configured' : 'Optional'; ?>
+				</span>
+			</div>
+			<p style="margin:0 0 12px; font-size:12px; color:var(--muted);">Generates studio-grade spoken voiceovers for TikToks, YouTube Shorts, and Reels.</p>
+			<div class="vmsai-field">
+				<label for="vmsai-elevenlabs-key" style="font-size:11px; font-weight:600;">ElevenLabs API Key</label>
+				<input type="password" id="vmsai-elevenlabs-key" name="elevenlabs_key" data-vmsai-cred="1" placeholder="xi-api-key-..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'elevenlabs_key' ) ); ?>" style="width:100%;">
+			</div>
+		</div>
+
+		<div class="vmsai-gateway-card" style="margin-bottom:0;">
+			<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+				<h3 style="margin:0; font-size:14px; color:#fff; display:flex; align-items:center; gap:8px;">
+					<span>🌐</span> Real-Time Web Intelligence (Tavily)
+				</h3>
+				<span class="vmsai-status <?php echo ! empty( VMSAI_Settings::credential( 'tavily_key' ) ) ? 'vmsai-status--live' : 'vmsai-status--down'; ?>">
+					<?php echo ! empty( VMSAI_Settings::credential( 'tavily_key' ) ) ? 'Configured' : 'Optional'; ?>
+				</span>
+			</div>
+			<p style="margin:0 0 12px; font-size:12px; color:var(--muted);">Powers live news-jacking and competitor research to ground social posts in real-time trends.</p>
+			<div class="vmsai-field">
+				<label for="vmsai-tavily-key" style="font-size:11px; font-weight:600;">Tavily API Key</label>
+				<input type="password" id="vmsai-tavily-key" name="tavily_key" data-vmsai-cred="1" placeholder="tvly-..." value="<?php echo esc_attr( VMSAI_Settings::mask( 'tavily_key' ) ); ?>" style="width:100%;">
+			</div>
+		</div>
+	</div>
+
+	<!-- 4. Interactive Live Model Explorer Drawer -->
+	<div class="vmsai-explorer-drawer" style="margin-top:24px;">
+		<div class="vmsai-explorer-drawer__head" id="vmsai-toggle-explorer">
+			<div style="display:flex; align-items:center; gap:10px;">
+				<span style="font-size:16px;">🔍</span>
 				<div>
-					<h2 class="vmsai-display"><?php esc_html_e( 'Auxiliary Intelligence & Tools', 'vm-social-ai-pro' ); ?></h2>
-					<p class="vmsai-lede"><?php esc_html_e( 'Voiceover generation and deep news research engines.', 'vm-social-ai-pro' ); ?></p>
+					<strong style="color:#fff; font-size:13px;">Live Model Catalogue Explorer</strong>
+					<span style="color:var(--muted); font-size:11px; margin-left:8px;">(<?php echo count( $all_synced_models ); ?> models synced from OmniRoute)</span>
 				</div>
 			</div>
+			<span style="color:var(--gold); font-size:11px; font-weight:600;" id="vmsai-explorer-indicator">▼ Click to Search & Pick Active Models</span>
+		</div>
 
-			<ol class="vmsai-chain">
-				<?php foreach ( array( 'elevenlabs', 'tavily' ) as $vmsai_slug ) :
-					$vmsai_label = ( 'elevenlabs' === $vmsai_slug ) ? 'ElevenLabs (Voiceover Studio)' : 'Tavily (Deep Real-Time Research)';
-					$vmsai_is_ready = ! empty( VMSAI_Settings::credential( $vmsai_slug . '_key' ) );
-				?>
-					<li class="vmsai-chain__item<?php echo $vmsai_is_ready ? ' is-ready' : ''; ?>">
-						<div class="vmsai-chain__bar">
-							<label class="vmsai-check" style="margin-left: 10px;">
-								<span class="vmsai-chain__name"><?php echo esc_html( $vmsai_label ); ?></span>
-							</label>
-							<span class="vmsai-chain__state">
-								<?php echo $vmsai_is_ready ? esc_html__( 'Configured', 'vm-social-ai-pro' ) : esc_html__( 'Needs a key', 'vm-social-ai-pro' ); ?>
-							</span>
-						</div>
-						<div class="vmsai-chain__body">
-							<?php
-							foreach ( $vmsai_creds[ $vmsai_slug ] ?? array() as $vmsai_field => $vmsai_meta ) :
-								if ( in_array( $vmsai_field, $vmsai_rendered_creds, true ) ) continue;
-								$vmsai_rendered_creds[] = $vmsai_field;
-							?>
-								<div class="vmsai-field">
-									<label for="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"><?php echo esc_html( $vmsai_meta[0] ); ?></label>
-									<input type="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? 'password' : 'text' ); ?>"
-										id="vmsai-<?php echo esc_attr( $vmsai_field ); ?>"
-										name="<?php echo esc_attr( $vmsai_field ); ?>" data-vmsai-cred="1"
-										autocomplete="off"
-										value="<?php echo esc_attr( 'password' === $vmsai_meta[1] ? VMSAI_Settings::mask( $vmsai_field ) : VMSAI_Settings::credential( $vmsai_field ) ); ?>">
-									<?php if ( $vmsai_meta[2] ) : ?>
-										<p class="vmsai-hint"><?php echo esc_html( $vmsai_meta[2] ); ?></p>
-									<?php endif; ?>
-								</div>
-							<?php endforeach; ?>
-						</div>
-					</li>
-				<?php endforeach; ?>
-			</ol>
-		</section>
-
-		<!-- Request Behaviour -->
-		<section class="vmsai-panel">
-			<h2 class="vmsai-panel__title"><?php esc_html_e( 'Request Behaviour & Resilience', 'vm-social-ai-pro' ); ?></h2>
-			<div class="vmsai-fields">
-				<div class="vmsai-field">
-					<label for="vmsai-timeout"><?php esc_html_e( 'Timeout per request (seconds)', 'vm-social-ai-pro' ); ?></label>
-					<input type="number" id="vmsai-timeout" name="request_timeout" min="15" max="600" value="<?php echo esc_attr( VMSAI_Settings::get( 'request_timeout', 90 ) ); ?>">
+		<div class="vmsai-explorer-body" id="vmsai-explorer-panel">
+			<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+				<div class="vmsai-cat-filter" style="display:flex; gap:8px;">
+					<input type="search" id="vmsai-cat-search" class="vmsai-input" placeholder="Search models by name or id (e.g. grok, gemini, flux, deepseek)..." style="min-width:320px;">
+					<button type="button" class="vmsai-btn vmsai-btn--sm is-active" data-vmsai-filter="all">All</button>
+					<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="text">Text</button>
+					<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="image">Image</button>
+					<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-filter="video">Video</button>
 				</div>
-				<div class="vmsai-field">
-					<label for="vmsai-attempts"><?php esc_html_e( 'Publish attempts before giving up', 'vm-social-ai-pro' ); ?></label>
-					<input type="number" id="vmsai-attempts" name="max_attempts" min="1" max="10" value="<?php echo esc_attr( VMSAI_Settings::get( 'max_attempts', 3 ) ); ?>">
-				</div>
+				<button type="button" class="vmsai-btn vmsai-btn--sm" data-vmsai-action="sync-models">
+					🔄 Refresh Sync
+				</button>
 			</div>
-			<p><button type="submit" class="vmsai-btn vmsai-btn--gold"><?php esc_html_e( 'Save Multi-Provider Chains', 'vm-social-ai-pro' ); ?></button></p>
-		</section>
+
+			<div style="max-height: 420px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 8px;">
+				<table class="vmsai-cat-table">
+					<thead>
+						<tr>
+							<th>Modality</th>
+							<th>Model ID</th>
+							<th>Display Name</th>
+							<th>Provider</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody id="vmsai-cat-body">
+						<?php
+						$count = 0;
+						foreach ( $all_synced_models as $m ) :
+							if ( ++$count > 300 ) break;
+							$mod = $m['modality'] ?? 'text';
+							$mid = $m['model_id'] ?? $m['id'];
+							$lbl = $m['label'] ?? $mid;
+						?>
+							<tr data-modality="<?php echo esc_attr( $mod ); ?>" data-search="<?php echo esc_attr( strtolower( $mid . ' ' . $lbl ) ); ?>">
+								<td><span class="vmsai-engine-card__tag" style="font-size:9px; background:rgba(255,255,255,0.06); color:var(--muted);"><?php echo esc_html( strtoupper( $mod ) ); ?></span></td>
+								<td><code><?php echo esc_html( $mid ); ?></code></td>
+								<td><strong><?php echo esc_html( $lbl ); ?></strong></td>
+								<td><?php echo esc_html( $m['provider'] ?? 'omniroute' ); ?></td>
+								<td>
+									<button type="button" class="vmsai-btn vmsai-btn--sm vmsai-btn-use-model"
+										data-modality="<?php echo esc_attr( $mod ); ?>"
+										data-model-id="<?php echo esc_attr( $mid ); ?>"
+										data-model-label="<?php echo esc_attr( $lbl ); ?>"
+										style="padding:3px 10px; font-size:11px;">
+										Use as Active
+									</button>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+
+	<!-- 5. Network Resiliency & Global Save -->
+	<div style="display:flex; justify-content:space-between; align-items:center; padding:18px 24px; background:var(--panel); border:1px solid var(--hairline); border-radius:12px;">
+		<div style="display:flex; gap:20px; align-items:center;">
+			<div class="vmsai-field" style="margin:0;">
+				<label for="vmsai-timeout" style="font-size:11px; margin-bottom:2px; display:block;">Timeout per Request</label>
+				<input type="number" id="vmsai-timeout" name="request_timeout" min="15" max="600" value="<?php echo esc_attr( VMSAI_Settings::get( 'request_timeout', 90 ) ); ?>" style="width:100px; font-size:12px;">
+				<span style="font-size:10px; color:var(--muted);">seconds</span>
+			</div>
+			<div class="vmsai-field" style="margin:0;">
+				<label for="vmsai-attempts" style="font-size:11px; margin-bottom:2px; display:block;">Max Retry Attempts</label>
+				<input type="number" id="vmsai-attempts" name="max_attempts" min="1" max="10" value="<?php echo esc_attr( VMSAI_Settings::get( 'max_attempts', 3 ) ); ?>" style="width:100px; font-size:12px;">
+				<span style="font-size:10px; color:var(--muted);">tries</span>
+			</div>
+		</div>
+
+		<button type="submit" class="vmsai-btn vmsai-btn--gold" style="padding: 12px 40px; font-weight:700; font-size:14px; box-shadow:0 4px 14px rgba(201,162,39,0.3);">
+			💾 Save All AI Engines & Settings
+		</button>
 	</div>
 </form>
 
 <script>
 (function($) {
-	// Mode Switcher (OmniRoute vs Chains)
-	$(document).on('click', '.vmsai-mode-btn', function() {
-		var mode = $(this).data('mode');
-		$('.vmsai-mode-btn').removeClass('is-active');
-		$(this).addClass('is-active');
-
-		$('.vmsai-mode-section').removeClass('is-active');
-		$('#section-' + mode).addClass('is-active');
-
-		$('#vmsai-engine-preset').val(mode);
-		if (window.localStorage) {
-			window.localStorage.setItem('vmsai_engine_active_mode', mode);
-		}
-	});
-
-	// Restore mode
-	if (window.localStorage) {
-		var savedMode = window.localStorage.getItem('vmsai_engine_active_mode');
-		if (savedMode && $('[data-mode="' + savedMode + '"]').length) {
-			$('[data-mode="' + savedMode + '"]').trigger('click');
-		}
-	}
-
 	// Collapsible Explorer Drawer
 	$('#vmsai-toggle-explorer').on('click', function() {
 		var $panel = $('#vmsai-explorer-panel');
 		$panel.toggleClass('is-open');
 		var isOpen = $panel.hasClass('is-open');
-		$('#vmsai-explorer-indicator').text(isOpen ? '▲ Hide Model Catalogue' : '▼ Click to Search & Browse Models');
+		$('#vmsai-explorer-indicator').text(isOpen ? '▲ Hide Model Catalogue' : '▼ Click to Search & Pick Active Models');
 	});
 
 	// Model Search Filter
@@ -859,7 +567,7 @@ $vmsai_creds = array(
 			} else {
 				$select.val(mid);
 			}
-			VMSAI.toast('Active Text model updated to ' + lbl);
+			if (window.VMSAI && VMSAI.toast) VMSAI.toast('Active Text model set to ' + lbl);
 		} else if (mod === 'image') {
 			var $select = $('#vmsai-omni-img-model');
 			if ($select.find('option[value="' + mid + '"]').length === 0) {
@@ -867,7 +575,7 @@ $vmsai_creds = array(
 			} else {
 				$select.val(mid);
 			}
-			VMSAI.toast('Active Image engine updated to ' + lbl);
+			if (window.VMSAI && VMSAI.toast) VMSAI.toast('Active Image engine set to ' + lbl);
 		} else if (mod === 'video') {
 			var $select = $('#vmsai-omni-vid-model');
 			if ($select.find('option[value="' + mid + '"]').length === 0) {
@@ -875,11 +583,11 @@ $vmsai_creds = array(
 			} else {
 				$select.val(mid);
 			}
-			VMSAI.toast('Active Video engine updated to ' + lbl);
+			if (window.VMSAI && VMSAI.toast) VMSAI.toast('Active Video engine set to ' + lbl);
 		}
 
-		// Scroll up smoothly to the card
-		$('html, body').animate({ scrollTop: $('#section-omniroute').offset().top - 40 }, 300);
+		// Smooth scroll to top cards
+		$('html, body').animate({ scrollTop: $('.vmsai-modality-triad').offset().top - 80 }, 300);
 	});
 })(jQuery);
 </script>

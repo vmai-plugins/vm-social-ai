@@ -408,7 +408,7 @@ class VMSAI_Admin {
 			if ( ! in_array( 'omniroute', $text_chain, true ) ) array_unshift( $text_chain, 'omniroute' );
 
 			$selected_img_model = sanitize_text_field( $post['image_model']['omniroute'] ?? '' );
-			if ( 'comfyui' === $selected_img_model ) {
+			if ( 'comfyui' === $selected_img_model || strpos( $selected_img_model, 'comfyui' ) !== false ) {
 				$image_chain = array_values( array_diff( $image_chain, array( 'comfyui', 'omniroute', 'pollinations' ) ) );
 				array_unshift( $image_chain, 'pollinations' );
 				array_unshift( $image_chain, 'omniroute' );
