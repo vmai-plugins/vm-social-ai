@@ -77,7 +77,15 @@ $vmsai_site    = get_bloginfo( 'name' );
 	.vmsai-schedule-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
 </style>
 
-<div class="vmsai-compose-wrap">
+<div class="vmsai-nav-sub" style="margin-bottom: 20px;">
+	<a href="#vmsai-compose-main" class="is-active"><?php esc_html_e( 'Social Studio', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-compose-imagelab"><?php esc_html_e( 'Visual DNA Lab', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-compose-videolab"><?php esc_html_e( 'Cinematic Video Lab', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-compose-optimizer"><?php esc_html_e( 'Site Media Optimizer', 'vm-social-ai-pro' ); ?></a>
+</div>
+
+<div id="vmsai-compose-main" class="vmsai-settings-section">
+	<div class="vmsai-compose-wrap">
 	<section class="vmsai-panel">
 		<div class="vmsai-panel__head">
 			<div>
@@ -210,6 +218,19 @@ $vmsai_site    = get_bloginfo( 'name' );
 
 		<?php endif; ?>
 	</section>
+</div>
+</div>
+
+<div id="vmsai-compose-imagelab" class="vmsai-settings-section" style="display:none;">
+	<?php include VMSAI_PATH . 'admin/views/image-lab.php'; ?>
+</div>
+
+<div id="vmsai-compose-videolab" class="vmsai-settings-section" style="display:none;">
+	<?php include VMSAI_PATH . 'admin/views/video-lab.php'; ?>
+</div>
+
+<div id="vmsai-compose-optimizer" class="vmsai-settings-section" style="display:none;">
+	<?php include VMSAI_PATH . 'admin/views/image-optimizer.php'; ?>
 </div>
 
 <script>

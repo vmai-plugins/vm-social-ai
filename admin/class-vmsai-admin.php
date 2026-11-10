@@ -108,15 +108,15 @@ class VMSAI_Admin {
 		// Screens that used to be their own top-level tab and are now consolidated.
 		// Forward old links and bookmarks rather than letting them fall through to the dashboard.
 		$moved = array(
-			'plans'     => 'settings#vmsai-section-plans',
+			'plans'     => 'settings',
 			'engines'   => 'settings#vmsai-section-engines',
-			'image-lab' => 'compose',
-			'video-lab' => 'compose',
-			'labs'      => 'compose',
-			'strategy'  => 'brain',
-			'agents'    => 'brain',
-			'pipeline'  => 'queue',
-			'plan'      => 'queue',
+			'image-lab' => 'compose#vmsai-compose-imagelab',
+			'video-lab' => 'compose#vmsai-compose-videolab',
+			'labs'      => 'compose#vmsai-compose-imagelab',
+			'strategy'  => 'brain#vmsai-brain-strategy',
+			'agents'    => 'brain#vmsai-brain-agents',
+			'pipeline'  => 'queue#vmsai-view-pipeline',
+			'plan'      => 'queue#vmsai-view-calendar',
 			'inbox'     => 'dashboard',
 		);
 
@@ -124,8 +124,22 @@ class VMSAI_Admin {
 			$requested = sanitize_key( wp_unslash( $_GET['tab'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
 
 			if ( isset( $moved[ $requested ] ) ) {
-				list( $tab, $hash ) = explode( '#', $moved[ $requested ] );
-				wp_safe_redirect( self::url( $tab ) . '#' . $hash );
+				$dest = $moved[ $requested ];
+				$hash = '';
+				if ( strpos( $dest, '#' ) !== false ) {
+					list( $tab, $hash ) = explode( '#', $dest, 2 );
+				} else {
+					$tab = $dest;
+				}
+				$redirect_url = self::url( $tab );
+				if ( 'queue#vmsai-view-pipeline' === $dest ) {
+					$redirect_url = add_query_arg( 'view', 'pipeline', self::url( 'queue' ) );
+				} elseif ( 'queue#vmsai-view-calendar' === $dest ) {
+					$redirect_url = add_query_arg( 'view', 'calendar', self::url( 'queue' ) );
+				} elseif ( ! empty( $hash ) ) {
+					$redirect_url .= '#' . $hash;
+				}
+				wp_safe_redirect( $redirect_url );
 				exit;
 			}
 		}

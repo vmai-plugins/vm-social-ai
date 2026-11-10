@@ -273,10 +273,13 @@ endif;
 	<div class="vmsai-nav-sub">
 		<a href="<?php echo esc_url( VMSAI_Admin::url( 'queue' ) ); ?>" class="<?php echo empty($_GET['view']) ? 'is-active' : ''; ?>"><?php esc_html_e( 'Review Queue', 'vm-social-ai-pro' ); ?></a>
 		<a href="<?php echo esc_url( add_query_arg( 'view', 'pipeline', VMSAI_Admin::url( 'queue' ) ) ); ?>" class="<?php echo ($_GET['view'] ?? '') === 'pipeline' ? 'is-active' : ''; ?>"><?php esc_html_e( 'Production Pipeline', 'vm-social-ai-pro' ); ?></a>
+		<a href="<?php echo esc_url( add_query_arg( 'view', 'calendar', VMSAI_Admin::url( 'queue' ) ) ); ?>" class="<?php echo ($_GET['view'] ?? '') === 'calendar' ? 'is-active' : ''; ?>"><?php esc_html_e( 'Calendar &amp; Campaigns', 'vm-social-ai-pro' ); ?></a>
 	</div>
 
 	<?php if ( ($_GET['view'] ?? '') === 'pipeline' ) : ?>
 		<?php include VMSAI_PATH . 'admin/views/pipeline.php'; ?>
+	<?php elseif ( ($_GET['view'] ?? '') === 'calendar' ) : ?>
+		<?php include VMSAI_PATH . 'admin/views/plan.php'; ?>
 	<?php else : ?>
 		<div class="vmsai-panel__head" style="margin-bottom: 30px;">
 		<div>

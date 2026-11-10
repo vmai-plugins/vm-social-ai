@@ -16,6 +16,9 @@ $vmsai_long   = array( 'offers', 'pain_points', 'proof', 'keywords', 'cta_librar
 	<a href="#vmsai-brain-business" class="is-active"><?php esc_html_e( 'Business Identity', 'vm-social-ai-pro' ); ?></a>
 	<a href="#vmsai-brain-branding"><?php esc_html_e( 'The Brand Kit', 'vm-social-ai-pro' ); ?></a>
 	<a href="#vmsai-brain-intel"><?php esc_html_e( 'Expertise & Intel', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-brain-strategy"><?php esc_html_e( 'Content Strategy', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-brain-agents"><?php esc_html_e( 'Autonomous Personas', 'vm-social-ai-pro' ); ?></a>
+	<a href="#vmsai-brain-trends"><?php esc_html_e( 'Trend Scout', 'vm-social-ai-pro' ); ?></a>
 </div>
 
 <div class="vmsai-settings-container" style="margin-top: 20px;">
@@ -129,4 +132,16 @@ $vmsai_long   = array( 'offers', 'pain_points', 'proof', 'keywords', 'cta_librar
 			<p><button type="submit" class="vmsai-btn vmsai-btn--gold"><?php esc_html_e( 'Save Intel & Feeds', 'vm-social-ai-pro' ); ?></button></p>
 		</form>
 	</section>
+</div>
+
+<div id="vmsai-brain-strategy" class="vmsai-settings-section" style="display:none; margin-top: 20px;">
+	<?php include VMSAI_PATH . 'admin/views/strategy.php'; ?>
+</div>
+
+<div id="vmsai-brain-agents" class="vmsai-settings-section" style="display:none; margin-top: 20px;">
+	<?php include VMSAI_PATH . 'admin/views/agents.php'; ?>
+</div>
+
+<div id="vmsai-brain-trends" class="vmsai-settings-section" style="display:none; margin-top: 20px;">
+	<?php include VMSAI_PATH . 'admin/views/research.php'; ?>
 </div>

@@ -46,7 +46,10 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 	 */
 	private function base() {
 		$url = VMSAI_Settings::credential( 'comfyui_url' );
-		return untrailingslashit( ! empty( $url ) ? $url : 'https://comfy.vmstudio.digital' );
+		if ( empty( $url ) || strpos( $url, '100.107.' ) !== false || strpos( $url, '127.0.0.1' ) !== false ) {
+			return 'https://comfy.vmstudio.digital';
+		}
+		return untrailingslashit( $url );
 	}
 
 	/**
@@ -213,12 +216,14 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 			$raw = self::default_workflow();
 		}
 
-		$seed   = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 2147483647 );
-		$width  = (int) ( ! empty( $args['width'] ) ? min( 1024, max( 512, (int) $args['width'] ) ) : 512 );
-		$height = (int) ( ! empty( $args['height'] ) ? min( 1024, max( 512, (int) $args['height'] ) ) : 512 );
+		$seed = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 2147483647 );
+		$raw_w = (int) ( $args['width'] ?? 512 );
+		$raw_h = (int) ( $args['height'] ?? 512 );
+		list( $width, $height ) = self::optimize_dimensions( $raw_w, $raw_h );
 
 		$prompt_json   = wp_json_encode( (string) $prompt );
-		$negative_val  = (string) ( $args['negative'] ?? 'text, watermark, logo, low quality, distorted, extra fingers' );
+		$default_neg   = 'blurry, low quality, distorted, bad anatomy, deformed, disfigured, extra limbs, watermark, text, signature, duplicate, cropped, out of frame';
+		$negative_val  = ! empty( $args['negative'] ) ? (string) $args['negative'] : $default_neg;
 		$negative_json = wp_json_encode( $negative_val );
 
 		$replacements = array(
@@ -238,6 +243,35 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 		$data = json_decode( $json, true );
 
 		return is_array( $data ) ? $data : null;
+	}
+
+	/**
+	 * Compute optimal width and height for SD 1.5 generation (multiples of 64).
+	 *
+	 * @param int $target_w Requested width.
+	 * @param int $target_h Requested height.
+	 * @return array{0:int, 1:int}
+	 */
+	public static function optimize_dimensions( $target_w, $target_h ) {
+		$target_w = max( 1, (int) $target_w );
+		$target_h = max( 1, (int) $target_h );
+		$ratio    = $target_w / $target_h;
+
+		if ( $ratio > 1.25 ) {
+			// Landscape (Facebook 1200x630, X 1600x900, LinkedIn 1200x627)
+			$w = 768;
+			$h = 512;
+		} elseif ( $ratio < 0.85 ) {
+			// Portrait / Vertical (Instagram 1080x1350, YouTube Short / Reel 1080x1920)
+			$w = 512;
+			$h = 768;
+		} else {
+			// Square (1:1)
+			$w = 512;
+			$h = 512;
+		}
+
+		return array( $w, $h );
 	}
 
 	/**
