@@ -384,7 +384,7 @@ if ( $vmsai_streak_weeks > 0 && $vmsai_days_quiet >= 0 && $vmsai_days_quiet <= 7
 			</div>
 			<div style="flex:1; background: var(--ink); padding: 25px; border-radius: 12px; text-align: center;">
 				<h4 style="margin-bottom:15px;">2. Channels</h4>
-				<a href="<?php echo esc_url( VMSAI_Admin::url( 'settings' ) . '#vmsai-section-channels' ); ?>" class="vmsai-btn">Connect</a>
+				<a href="<?php echo esc_url( VMSAI_Admin::url( 'channels' ) ); ?>" class="vmsai-btn">Connect</a>
 			</div>
 			<div style="flex:1; background: var(--ink); padding: 25px; border-radius: 12px; text-align: center;">
 				<h4 style="margin-bottom:15px;">3. Target</h4>

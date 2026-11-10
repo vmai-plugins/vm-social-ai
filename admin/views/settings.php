@@ -15,8 +15,8 @@ $vmsai_level = VMSAI_Settings::get( 'log_level', 'info' );
 <div class="vmsai-nav-sub">
 	<a href="#vmsai-section-general" class="is-active"><?php esc_html_e( 'General', 'vm-social-ai-pro' ); ?></a>
 	<?php if ( current_user_can( 'vmsai_manage_keys' ) ) : ?>
-		<a href="#vmsai-section-engines"><?php esc_html_e( 'AI Engines', 'vm-social-ai-pro' ); ?></a>
-		<a href="#vmsai-section-channels"><?php esc_html_e( 'Social Channels', 'vm-social-ai-pro' ); ?></a>
+		<a href="#vmsai-section-engines"><?php esc_html_e( 'AI Engines & Generation Hub', 'vm-social-ai-pro' ); ?></a>
+		<a href="<?php echo esc_url( VMSAI_Admin::url( 'channels' ) ); ?>"><?php esc_html_e( 'Social Channels ↗', 'vm-social-ai-pro' ); ?></a>
 	<?php endif; ?>
 	<a href="#vmsai-section-logs"><?php esc_html_e( 'System Logs', 'vm-social-ai-pro' ); ?></a>
 	<?php if ( current_user_can( 'vmsai_manage_keys' ) ) : ?>
@@ -343,10 +343,6 @@ $vmsai_level = VMSAI_Settings::get( 'log_level', 'info' );
 
 <div id="vmsai-section-engines" class="vmsai-settings-section" style="display:none;">
 	<?php include VMSAI_PATH . 'admin/views/engines.php'; ?>
-</div>
-
-<div id="vmsai-section-channels" class="vmsai-settings-section" style="display:none;">
-	<?php include VMSAI_PATH . 'admin/views/channels.php'; ?>
 </div>
 
 <div id="vmsai-section-logs" class="vmsai-settings-section" style="display:none;">

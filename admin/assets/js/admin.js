@@ -615,8 +615,17 @@ jQuery( function ( $ ) {
 	actions[ 'test-provider' ] = function ( button ) {
 		var engine = button.dataset.engine;
 		var provider = button.dataset.provider;
-		var $item = $( button ).closest( '.vmsai-chain__item' );
-		var $result = $item.find( '.vmsai-chain__result' );
+		if ( 'image' === engine && $( '#vmsai-omni-img-model' ).length ) {
+			var activeImgModel = $( '#vmsai-omni-img-model' ).val();
+			if ( 'comfyui' === activeImgModel ) {
+				provider = 'comfyui';
+			}
+		}
+		var $parent = $( button ).closest( '.vmsai-chain__item, .vmsai-modality-card' );
+		var $result = $parent.find( '.vmsai-chain__result' );
+		if ( ! $result.length && 'image' === engine ) {
+			$result = $( '#omni-test-result-image' );
+		}
 
 		busy( button, true );
 		$result.text( '' ).removeClass( 'is-ok is-bad' );

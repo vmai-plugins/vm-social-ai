@@ -166,16 +166,16 @@ class VMSAI_Settings {
 		}
 
 		// Pro Feature: Cross-Plugin Credential Sync.
-		// If key is missing here, check VM SEO Brain and VM Image AI to avoid re-entering (with recursion guard).
-		static $resolving = array();
-		if ( empty( $resolving[ $key ] ) && '' === $value ) {
-			$resolving[ $key ] = true;
+		// If key is missing here, check VM SEO Brain and VM Image AI to avoid re-entering.
+		static $in_sync = false;
+		if ( ! $in_sync && '' === $value ) {
+			$in_sync = true;
 			try {
 				// 1. Check VM SEO Brain
 				if ( class_exists( 'VMSB_Settings' ) ) {
 					$vmsb_val = VMSB_Settings::get( $key );
-					if ( $vmsb_val ) {
-						unset( $resolving[ $key ] );
+					if ( ! empty( $vmsb_val ) ) {
+						$in_sync = false;
 						return (string) $vmsb_val;
 					}
 				}
@@ -183,13 +183,15 @@ class VMSAI_Settings {
 				// 2. Check VM Image AI
 				if ( class_exists( 'VMIA_Settings' ) ) {
 					$vmia_val = VMIA_Settings::get( $key );
-					if ( $vmia_val ) {
-						unset( $resolving[ $key ] );
+					if ( ! empty( $vmia_val ) ) {
+						$in_sync = false;
 						return (string) $vmia_val;
 					}
 				}
+			} catch ( \Throwable $e ) {
+				// Suppress cross-plugin exceptions.
 			} finally {
-				unset( $resolving[ $key ] );
+				$in_sync = false;
 			}
 		}
 

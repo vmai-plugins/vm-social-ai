@@ -98,9 +98,9 @@ $vmsai_creds = array(
 	'huggingface'  => array( 'hf_token' => array( __( 'Hugging Face Token', 'vm-social-ai-pro' ), 'password', __( 'From huggingface.co.', 'vm-social-ai-pro' ) ) ),
 	'cloudflare'   => array( 'cf_token' => array( __( 'Cloudflare API Token', 'vm-social-ai-pro' ), 'password', __( 'Needs Workers AI permissions.', 'vm-social-ai-pro' ) ) ),
 	'comfyui'      => array(
-		'comfyui_url'      => array( __( 'Server URL', 'vm-social-ai-pro' ), 'url', __( 'e.g. http://127.0.0.1:8188.', 'vm-social-ai-pro' ) ),
+		'comfyui_url'      => array( __( 'Server URL', 'vm-social-ai-pro' ), 'url', __( 'e.g. https://comfy.vmstudio.digital or http://127.0.0.1:8188 (default: https://comfy.vmstudio.digital).', 'vm-social-ai-pro' ) ),
 		'comfyui_token'    => array( __( 'Bearer token', 'vm-social-ai-pro' ), 'password', '' ),
-		'comfyui_workflow' => array( __( 'Workflow JSON', 'vm-social-ai-pro' ), 'textarea', '' ),
+		'comfyui_workflow' => array( __( 'Workflow JSON', 'vm-social-ai-pro' ), 'textarea', __( 'Leave blank to use the built-in DreamShaper 8 workflow.', 'vm-social-ai-pro' ) ),
 	),
 	'pexels'       => array( 'pexels_key' => array( __( 'API key', 'vm-social-ai-pro' ), 'password', __( 'Stock fallback.', 'vm-social-ai-pro' ) ) ),
 	'minimax'      => array( 'minimax_key' => array( __( 'API Key', 'vm-social-ai-pro' ), 'password', __( 'From platform.minimaxi.com.', 'vm-social-ai-pro' ) ) ),
@@ -319,24 +319,31 @@ $vmsai_creds = array(
 
 						<div class="vmsai-modality-card__select">
 							<label for="vmsai-omni-img-model" style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:4px;">
-								<?php esc_html_e( 'Active Image Model', 'vm-social-ai-pro' ); ?>
+								<?php esc_html_e( 'Active Image Model / Local GPU', 'vm-social-ai-pro' ); ?>
 							</label>
 							<select id="vmsai-omni-img-model" name="image_model[omniroute]">
+								<optgroup label="<?php esc_attr_e( 'Local GPU Acceleration (Laptop 2)', 'vm-social-ai-pro' ); ?>">
+									<option value="comfyui" <?php selected( ( $vmsai_imodel['omniroute'] ?? '' ) === 'comfyui' || ( ! empty( $vmsai_ichain ) && 'comfyui' === $vmsai_ichain[0] ) ); ?>>
+										🖥️ <?php esc_html_e( 'Laptop 2 (ComfyUI GPU · 100% Free · RTX 3060)', 'vm-social-ai-pro' ); ?>
+									</option>
+								</optgroup>
+								<optgroup label="<?php esc_attr_e( 'OmniRoute Cloud Models', 'vm-social-ai-pro' ); ?>">
 								<?php foreach ( $omni_image_models as $m ) :
 									$mid = $m['model_id'] ?? $m['id'];
-									$sel = ( ($vmsai_imodel['omniroute'] ?? 'aihorde/stable_diffusion') === $mid );
+									$sel = ( ( $vmsai_imodel['omniroute'] ?? 'aihorde/stable_diffusion' ) === $mid && ( empty( $vmsai_ichain ) || 'comfyui' !== $vmsai_ichain[0] ) );
 								?>
 									<option value="<?php echo esc_attr( $mid ); ?>" <?php selected( $sel ); ?>>
 										<?php echo esc_html( $m['label'] ?? $mid ); ?>
 									</option>
 								<?php endforeach; ?>
+								</optgroup>
 							</select>
 						</div>
 
 						<ul class="vmsai-modality-card__features">
-							<li><span>✓</span> <?php esc_html_e( 'AI Horde crowdsourced cluster (Free)', 'vm-social-ai-pro' ); ?></li>
+							<li><span>✓</span> <?php esc_html_e( 'RTX 3060 Laptop GPU acceleration via comfy.vmstudio.digital', 'vm-social-ai-pro' ); ?></li>
+							<li><span>✓</span> <?php esc_html_e( 'OmniRoute & AI Horde crowdsourced cluster failover', 'vm-social-ai-pro' ); ?></li>
 							<li><span>✓</span> <?php esc_html_e( 'Magic-byte WebP & auto media sideloading', 'vm-social-ai-pro' ); ?></li>
-							<li><span>✓</span> <?php esc_html_e( 'Pollinations AI keyless fallback floor', 'vm-social-ai-pro' ); ?></li>
 						</ul>
 					</div>
 

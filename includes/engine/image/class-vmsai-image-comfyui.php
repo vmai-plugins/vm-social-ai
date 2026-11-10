@@ -45,16 +45,84 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 	 * @return string
 	 */
 	private function base() {
-		return untrailingslashit( VMSAI_Settings::credential( 'comfyui_url' ) );
+		$url = VMSAI_Settings::credential( 'comfyui_url' );
+		return untrailingslashit( ! empty( $url ) ? $url : 'https://comfy.vmstudio.digital' );
 	}
 
 	/**
-	 * Needs both a host and a workflow to be useful.
+	 * Default built-in ComfyUI workflow for standard SD 1.5 / SDXL checkpoint generation.
+	 *
+	 * @return string
+	 */
+	public static function default_workflow() {
+		return '{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "cfg": 7,
+      "denoise": 1,
+      "latent_image": ["5", 0],
+      "model": ["4", 0],
+      "negative": ["7", 0],
+      "positive": ["6", 0],
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "seed": {{seed}},
+      "steps": 20
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "dreamshaper_8.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "batch_size": 1,
+      "height": {{height}},
+      "width": {{width}}
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["4", 1],
+      "text": "{{prompt}}"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["4", 1],
+      "text": "{{negative}}"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "vmsai_laptop2",
+      "images": ["8", 0]
+    }
+  }
+}';
+	}
+
+	/**
+	 * Whether ComfyUI is ready to run.
 	 *
 	 * @return bool
 	 */
 	public function is_configured() {
-		return '' !== $this->base() && '' !== VMSAI_Settings::credential( 'comfyui_workflow' );
+		return '' !== $this->base();
 	}
 
 	/**
@@ -63,8 +131,15 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 	 * @return array
 	 */
 	private function headers() {
+		$headers = array(
+			'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+			'Origin'     => $this->base(),
+		);
 		$token = VMSAI_Settings::credential( 'comfyui_token' );
-		return $token ? array( 'Authorization' => 'Bearer ' . $token ) : array();
+		if ( ! empty( $token ) ) {
+			$headers['Authorization'] = 'Bearer ' . $token;
+		}
+		return $headers;
 	}
 
 	/**
@@ -134,13 +209,23 @@ class VMSAI_Image_Comfyui implements VMSAI_Image_Provider {
 	 */
 	private function build_workflow( $prompt, array $args ) {
 		$raw = VMSAI_Settings::credential( 'comfyui_workflow' );
+		if ( empty( $raw ) ) {
+			$raw = self::default_workflow();
+		}
+
+		$seed   = isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, 2147483647 );
+		$width  = (int) ( ! empty( $args['width'] ) ? min( 1024, max( 512, (int) $args['width'] ) ) : 512 );
+		$height = (int) ( ! empty( $args['height'] ) ? min( 1024, max( 512, (int) $args['height'] ) ) : 512 );
 
 		$replacements = array(
+			'"{{seed}}"'   => $seed,
+			'{{seed}}'     => $seed,
+			'"{{width}}"'  => $width,
+			'{{width}}'    => $width,
+			'"{{height}}"' => $height,
+			'{{height}}'   => $height,
 			'{{prompt}}'   => $this->escape( $prompt ),
 			'{{negative}}' => $this->escape( (string) ( $args['negative'] ?? 'text, watermark, logo, low quality, distorted, extra fingers' ) ),
-			'{{width}}'    => (int) ( $args['width'] ?? 1080 ),
-			'{{height}}'   => (int) ( $args['height'] ?? 1350 ),
-			'{{seed}}'     => isset( $args['seed'] ) ? (int) $args['seed'] : wp_rand( 1, PHP_INT_MAX ),
 		);
 
 		$json = str_replace( array_keys( $replacements ), array_values( $replacements ), $raw );

@@ -20,26 +20,14 @@ class VMSAI_Admin {
 	 * @return array<string,string>
 	 */
 	public static function tabs() {
-		$tabs = array(
+		return array(
 			'dashboard' => __( 'Dashboard', 'vm-social-ai-pro' ),
+			'compose'   => __( 'Social Studio', 'vm-social-ai-pro' ),
+			'queue'     => __( 'Queue & Schedule', 'vm-social-ai-pro' ),
+			'channels'  => __( 'Channels', 'vm-social-ai-pro' ),
+			'brain'     => __( 'Autonomous Brain', 'vm-social-ai-pro' ),
+			'settings'  => __( 'AI Engines & Settings', 'vm-social-ai-pro' ),
 		);
-
-		// Upgrade/licensing is not day-to-day work — it lives as a section
-		// inside Settings rather than taking a slot in the primary nav.
-		$tabs = array_merge( $tabs, array(
-			'compose'   => __( 'Compose', 'vm-social-ai-pro' ),
-			'strategy'  => __( 'Strategy', 'vm-social-ai-pro' ),
-			'agents'    => __( 'Agents', 'vm-social-ai-pro' ),
-			'labs'      => __( 'Labs', 'vm-social-ai-pro' ),
-			'inbox'     => __( 'Inbox', 'vm-social-ai-pro' ),
-			'brain'     => __( 'Brain', 'vm-social-ai-pro' ),
-			'plan'      => __( 'Plan', 'vm-social-ai-pro' ),
-			'queue'     => __( 'Queue', 'vm-social-ai-pro' ),
-			'pipeline'  => __( 'Pipeline', 'vm-social-ai-pro' ),
-			'settings'  => __( 'Settings', 'vm-social-ai-pro' ),
-		) );
-
-		return $tabs;
 	}
 
 	/**
@@ -89,26 +77,26 @@ class VMSAI_Admin {
 			if ( 'meta_callback' === $oauth_action ) {
 				$res = VMSAI_OAuth::handle_meta_callback( $_GET );
 				$msg = is_wp_error( $res ) ? 'meta_failed' : 'meta_connected';
-				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=' . $msg ) . '#vmsai-section-channels' );
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=channels&vmsai_msg=' . $msg ) );
 				exit;
 			}
 
 			if ( 'meta_disconnect' === $oauth_action && isset( $_GET['nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'vmsai_meta_disconnect' ) ) {
 				VMSAI_OAuth::meta_disconnect();
-				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=meta_disconnected' ) . '#vmsai-section-channels' );
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=channels&vmsai_msg=meta_disconnected' ) );
 				exit;
 			}
 
 			if ( 'youtube_callback' === $oauth_action ) {
 				$res = VMSAI_OAuth::handle_youtube_callback( $_GET );
 				$msg = is_wp_error( $res ) ? 'youtube_failed' : 'youtube_connected';
-				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=' . $msg ) . '#vmsai-section-channels' );
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=channels&vmsai_msg=' . $msg ) );
 				exit;
 			}
 
 			if ( 'youtube_disconnect' === $oauth_action && isset( $_GET['nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'vmsai_youtube_disconnect' ) ) {
 				VMSAI_OAuth::youtube_disconnect();
-				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=settings&vmsai_msg=youtube_disconnected' ) . '#vmsai-section-channels' );
+				wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '&tab=channels&vmsai_msg=youtube_disconnected' ) );
 				exit;
 			}
 		}
@@ -117,14 +105,19 @@ class VMSAI_Admin {
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
 			exit;
 		}
-		// Screens that used to be their own top-level tab and are now sections
-		// inside another one. Forward old links and bookmarks rather than
-		// letting them fall through to the dashboard. Runs on admin_init so a
-		// real redirect is still possible, before any page output.
+		// Screens that used to be their own top-level tab and are now consolidated.
+		// Forward old links and bookmarks rather than letting them fall through to the dashboard.
 		$moved = array(
-			'plans'     => 'settings',
-			'image-lab' => 'labs#vmsai-section-image-lab',
-			'video-lab' => 'labs#vmsai-section-video-lab',
+			'plans'     => 'settings#vmsai-section-plans',
+			'engines'   => 'settings#vmsai-section-engines',
+			'image-lab' => 'compose',
+			'video-lab' => 'compose',
+			'labs'      => 'compose',
+			'strategy'  => 'brain',
+			'agents'    => 'brain',
+			'pipeline'  => 'queue',
+			'plan'      => 'queue',
+			'inbox'     => 'dashboard',
 		);
 
 		if ( isset( $_GET['page'], $_GET['tab'] ) && self::SLUG === sanitize_key( wp_unslash( $_GET['page'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification
@@ -176,8 +169,17 @@ class VMSAI_Admin {
 
 		add_submenu_page(
 			self::SLUG,
-			__( 'Queue', 'vm-social-ai-pro' ),
-			__( 'Queue', 'vm-social-ai-pro' ),
+			__( 'Social Studio', 'vm-social-ai-pro' ),
+			__( 'Social Studio', 'vm-social-ai-pro' ),
+			'vmsai_edit',
+			self::SLUG . '&tab=compose',
+			array( $this, 'render' )
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'Queue & Schedule', 'vm-social-ai-pro' ),
+			__( 'Queue & Schedule', 'vm-social-ai-pro' ),
 			'vmsai_read',
 			self::SLUG . '&tab=queue',
 			array( $this, 'render' )
@@ -185,17 +187,26 @@ class VMSAI_Admin {
 
 		add_submenu_page(
 			self::SLUG,
-			__( 'Plan & Campaigns', 'vm-social-ai-pro' ),
-			__( 'Plan & Campaigns', 'vm-social-ai-pro' ),
-			'vmsai_read',
-			self::SLUG . '&tab=plan',
+			__( 'Channels', 'vm-social-ai-pro' ),
+			__( 'Channels', 'vm-social-ai-pro' ),
+			'vmsai_manage_keys',
+			self::SLUG . '&tab=channels',
 			array( $this, 'render' )
 		);
 
 		add_submenu_page(
 			self::SLUG,
-			__( 'Channels & Settings', 'vm-social-ai-pro' ),
-			__( 'Channels & Settings', 'vm-social-ai-pro' ),
+			__( 'Autonomous Brain', 'vm-social-ai-pro' ),
+			__( 'Autonomous Brain', 'vm-social-ai-pro' ),
+			'vmsai_read',
+			self::SLUG . '&tab=brain',
+			array( $this, 'render' )
+		);
+
+		add_submenu_page(
+			self::SLUG,
+			__( 'AI Engines & Settings', 'vm-social-ai-pro' ),
+			__( 'AI Engines & Settings', 'vm-social-ai-pro' ),
 			'vmsai_manage_keys',
 			self::SLUG . '&tab=settings',
 			array( $this, 'render' )
@@ -341,9 +352,12 @@ class VMSAI_Admin {
 		$redirect_tab  = 'settings';
 		$redirect_hash = '';
 
-		if ( 'settings' === $section ) {
+		if ( 'channels' === $section ) {
+			$redirect_tab  = 'channels';
+			$redirect_hash = '';
+		} elseif ( 'settings' === $section ) {
 			$redirect_tab = 'settings';
-		} elseif ( in_array( $section, array( 'engines', 'channels', 'logs', 'updates' ), true ) ) {
+		} elseif ( in_array( $section, array( 'engines', 'logs', 'updates' ), true ) ) {
 			$redirect_tab  = 'settings';
 			$redirect_hash = '#vmsai-section-' . $section;
 		} elseif ( isset( self::tabs()[ $section ] ) ) {
@@ -378,8 +392,20 @@ class VMSAI_Admin {
 			VMSAI_Settings::set( 'video_source', sanitize_key( $post['video_source'] ) );
 		} elseif ( 'omniroute' === $engine_preset ) {
 			if ( ! in_array( 'omniroute', $text_chain, true ) ) array_unshift( $text_chain, 'omniroute' );
-			if ( ! in_array( 'omniroute', $image_chain, true ) ) array_unshift( $image_chain, 'omniroute' );
-			if ( ! in_array( 'pollinations', $image_chain, true ) ) $image_chain[] = 'pollinations';
+
+			$selected_img_model = sanitize_text_field( $post['image_model']['omniroute'] ?? '' );
+			if ( 'comfyui' === $selected_img_model ) {
+				$image_chain = array_values( array_diff( $image_chain, array( 'comfyui', 'omniroute', 'pollinations' ) ) );
+				array_unshift( $image_chain, 'pollinations' );
+				array_unshift( $image_chain, 'omniroute' );
+				array_unshift( $image_chain, 'comfyui' );
+			} else {
+				$image_chain = array_values( array_diff( $image_chain, array( 'omniroute', 'comfyui', 'pollinations' ) ) );
+				array_unshift( $image_chain, 'pollinations' );
+				array_unshift( $image_chain, 'comfyui' );
+				array_unshift( $image_chain, 'omniroute' );
+			}
+
 			if ( ! in_array( 'omniroute', $video_chain, true ) ) array_unshift( $video_chain, 'omniroute' );
 			if ( empty( VMSAI_Settings::get( 'video_source' ) ) ) {
 				$default_vid = '' !== VMSAI_Settings::credential( 'pexels_key' ) ? 'pexels' : 'omniroute';

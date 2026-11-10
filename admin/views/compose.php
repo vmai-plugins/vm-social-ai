@@ -89,7 +89,7 @@ $vmsai_site    = get_bloginfo( 'name' );
 		<?php if ( ! $vmsai_ready ) : ?>
 			<div class="vmsai-empty" style="padding: 50px; text-align: center; color: var(--muted);">
 				<p><?php esc_html_e( 'No channels are connected yet.', 'vm-social-ai-pro' ); ?></p>
-				<a class="vmsai-btn vmsai-btn--gold" href="<?php echo esc_url( VMSAI_Admin::url( 'settings' ) ); ?>#vmsai-section-channels"><?php esc_html_e( 'Connect a channel', 'vm-social-ai-pro' ); ?></a>
+				<a class="vmsai-btn vmsai-btn--gold" href="<?php echo esc_url( VMSAI_Admin::url( 'channels' ) ); ?>"><?php esc_html_e( 'Connect a channel', 'vm-social-ai-pro' ); ?></a>
 			</div>
 		<?php else : ?>
 
