@@ -276,7 +276,7 @@ class VMSAI_OAuth {
 		$state = hash( 'sha256', random_bytes( 32 ) . time() );
 		set_transient( 'vmsai_google_oauth_state', $state, self::STATE_TTL );
 
-		$redirect_uri = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_callback' );
+		$redirect_uri = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=channels&vmsai_oauth=youtube_callback' );
 
 		// Direct Google OAuth if Client ID is configured
 		$client_id = VMSAI_Settings::credential( 'google_client_id' );
@@ -340,7 +340,8 @@ class VMSAI_OAuth {
 			$code          = sanitize_text_field( wp_unslash( $params['code'] ) );
 			$client_id     = VMSAI_Settings::credential( 'google_client_id' );
 			$client_secret = VMSAI_Settings::credential( 'google_client_secret' );
-			$redirect_uri  = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=settings&vmsai_oauth=youtube_callback' );
+			$tab           = ! empty( $params['tab'] ) ? sanitize_key( $params['tab'] ) : 'channels';
+			$redirect_uri  = admin_url( 'admin.php?page=' . VMSAI_Admin::SLUG . '&tab=' . $tab . '&vmsai_oauth=youtube_callback' );
 
 			if ( ! empty( $client_id ) && ! empty( $client_secret ) ) {
 				$res = VMSAI_Http::post( 'https://oauth2.googleapis.com/token', array(
