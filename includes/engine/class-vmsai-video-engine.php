@@ -929,7 +929,7 @@ class VMSAI_Video_Engine {
 			$in_idx++;
 		}
 
-		// PRO: Burned-in Dynamic Subtitles
+		// PRO: Burned-in Dynamic Subtitles (Modern frosted black pill with crisp white typography)
 		$body = wp_strip_all_tags( $post['body'] );
 		$body = preg_replace( '/#[a-zA-Z0-9_]+/', '', $body ); // Strip hashtags
 		$words = array_filter( explode( ' ', trim($body) ) );
@@ -944,20 +944,35 @@ class VMSAI_Video_Engine {
 			$start = $i * $time_per_chunk;
 			$end = ( $i + 1 ) * $time_per_chunk;
 
-			// Subtitle Filter: Bottom-centered, bright yellow/white, bold.
-			$sub_filter = "drawtext=text='{$safe_text}':fontcolor=yellow:fontsize=64:font='Sans':x=(w-text_w)/2:y=h-400:enable='between(t,{$start},{$end})':borderw=3:bordercolor=black";
+			// Subtitle Filter: Bottom-centered, modern pill card, crisp white text
+			$sub_filter = "drawtext=text='{$safe_text}':fontcolor=white:fontsize=52:font='Sans':x=(w-text_w)/2:y=h-360:enable='between(t,{$start},{$end})':box=1:boxcolor=black@0.75:boxborderw=24:shadowcolor=black@0.5:shadowx=2:shadowy=2";
 			$filters[] = "[{$last_v}]{$sub_filter}[v_sub{$i}]";
 			$last_v = "v_sub{$i}";
 		}
 
-		// Overlay Text Hook (Centered Bold with smart wrapping for FFmpeg)
+		// Overlay Text Hook (Dynamic font-scaling with textfile to eliminate newline \n escaping bugs)
+		$hook_file = null;
 		if ( $hook ) {
-			// Pro Fix: Manual line wrapping to ensure readability on all FFmpeg versions
-			$wrapped_hook = wordwrap( strtoupper( $hook ), 20, "\n" );
-			$safe_hook = self::escape_drawtext( $wrapped_hook );
+			$hook_len = mb_strlen( $hook );
+			$wrap_chars = 18;
+			$fontsize = 68;
+			if ( $hook_len > 55 ) {
+				$fontsize = 48;
+				$wrap_chars = 26;
+			} elseif ( $hook_len > 32 ) {
+				$fontsize = 58;
+				$wrap_chars = 22;
+			}
 
-			// Pro Text Filter: Centered, white, high-contrast semi-transparent box.
-			$text_filter = "drawtext=text='{$safe_hook}':fontcolor=white:fontsize=72:font='Sans':x=(w-text_w)/2:y=(h-text_h)/2-120:box=1:boxcolor=black@0.6:boxborderw=40:shadowcolor=black@0.4:shadowx=4:shadowy=4:line_spacing=15";
+			$wrapped_hook = wordwrap( strtoupper( $hook ), $wrap_chars, "\n" );
+			$hook_file = tempnam( sys_get_temp_dir(), 'vmsai_hk_' ) . '.txt';
+			file_put_contents( $hook_file, $wrapped_hook );
+
+			// In FFmpeg drawtext, escaping colon and backslash for the textfile parameter prevents any shell/filter expansion corruption
+			$safe_hook_path = str_replace( array( '\\', ':', "'" ), array( '/', '\\:', "\\'" ), $hook_file );
+
+			// Pro Text Filter: Centered, high-contrast semi-transparent backdrop card
+			$text_filter = "drawtext=textfile='{$safe_hook_path}':fontcolor=white:fontsize={$fontsize}:font='Sans':x=(w-text_w)/2:y=(h-text_h)/2-120:box=1:boxcolor=black@0.70:boxborderw=36:shadowcolor=black@0.5:shadowx=3:shadowy=3:line_spacing=18";
 			$filters[] = "[{$last_v}]{$text_filter}[v_text]";
 			$last_v = "v_text";
 		}
@@ -990,6 +1005,7 @@ class VMSAI_Video_Engine {
 
 		if ( $source_video && file_exists($source_video) ) @unlink($source_video);
 		if ( $tts_file && file_exists($tts_file) ) @unlink($tts_file);
+		if ( ! empty( $hook_file ) && file_exists( $hook_file ) ) @unlink( $hook_file );
 
 		if ( 0 !== $status || ! file_exists( $output ) ) {
 			VMSAI_Logger::error( 'engine.video', 'Production failed.', array( 'status' => $status, 'cmd' => $command ) );

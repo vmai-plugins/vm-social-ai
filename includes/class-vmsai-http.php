@@ -390,6 +390,10 @@ class VMSAI_Http {
 		if ( in_array( $host, array( 'localhost', '::1', '::ffff:127.0.0.1' ), true ) ) {
 			return true;
 		}
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( $home_host && strtolower( $host ) === strtolower( $home_host ) ) {
+			return true;
+		}
 		if ( false !== strpos( $host, '.local' ) || false !== strpos( $host, '.localhost' ) || false !== strpos( $host, '.test' ) || false !== strpos( $host, '.example' ) || false !== strpos( $host, '.invalid' ) ) {
 			return true;
 		}
