@@ -40,15 +40,18 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 		$key      = VMSAI_Settings::credential( 'omniroute_key' );
 		$base_url = VMSAI_Settings::credential( 'omniroute_url' );
 		$saved_m  = VMSAI_Settings::get( 'image_model', array() );
-		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'aihorde/stable_diffusion' );
+		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'antigravity/gemini-3.1-flash-image' );
 
-		if ( empty( $model ) || 'flux' === $model || 'nvidia/black-forest-labs/flux.1-schnell' === $model ) {
-			$model = 'aihorde/stable_diffusion';
+		if ( empty( $model ) || 'flux' === $model || 'aihorde/stable_diffusion' === $model ) {
+			$model = 'antigravity/gemini-3.1-flash-image';
 		}
+
+		// Inject Elite Indian Travel / Pilgrimage Photographic Prompt Enhancer
+		$enhanced_prompt = $this->enhance_prompt( $prompt );
 
 		$payload = array(
 			'model'  => $model,
-			'prompt' => $prompt,
+			'prompt' => $enhanced_prompt,
 			'n'      => 1,
 			'size'   => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
 		);
@@ -59,7 +62,7 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
 				'json'    => $payload,
 				'scope'   => 'engine.image.omniroute',
-				'timeout' => 45,
+				'timeout' => 60,
 				'retries' => 1,
 			)
 		);
@@ -106,19 +109,32 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 		);
 	}
 
+	/**
+	 * Enhances the prompt with realistic Indian photography context and excludes models/watermarks.
+	 */
+	private function enhance_prompt( $prompt ) {
+		$clean = trim( $prompt );
+		$clean = preg_replace( '/^Style:\s*PHOTO-REALISTIC VISUAL BRIEF\.\s*/i', '', $clean );
+
+		$quality_guardrail  = 'Award-winning National Geographic travel photography, authentic Indian atmosphere, rich natural colors, crisp golden hour lighting, 8k resolution, shot on Sony A7R V with 35mm f/1.8 lens, sharp focus, highly detailed textures';
+		$negative_guardrail = '--no fashion model, western woman, sunglasses, runway glamour, studio portrait, caucasian model, makeup, lingerie, plastic skin, distorted vehicle, cartoon, 3d render, watermark, text, lowres, blur';
+
+		return $quality_guardrail . '. ' . $clean . ' ' . $negative_guardrail;
+	}
+
 	private function fail( $error ) {
 		return array( 'ok' => false, 'binary' => '', 'url' => '', 'mime' => '', 'credit' => '', 'error' => $error );
 	}
 
 	private function nearest_size( $w, $h ) {
 		$ratio = $w / max( 1, $h );
-		if ( $ratio > 1.5 ) {
-			return '768x512';
+		if ( $ratio > 1.4 ) {
+			return '1200x630';
 		}
-		if ( $ratio < 0.6 ) {
-			return '512x768';
+		if ( $ratio < 0.7 ) {
+			return '1080x1350';
 		}
-		return '512x512';
+		return '1024x1024';
 	}
 
 	public function list_models() {
@@ -142,14 +158,13 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 			return $this->default_models();
 		}
 
-		$models = array();
+		$models   = array();
 		$keywords = array( 'flux', 'sdxl', 'image', 'diffusion', 'dall', 'midjourney', 'imagen' );
 
 		foreach ( $response['json']['data'] as $model ) {
 			$id = $model['id'] ?? '';
 			if ( ! $id ) continue;
 
-			// Skip video models
 			if ( str_contains( $id, 'video' ) || str_contains( $id, 'veo' ) ) continue;
 
 			$match = false;
@@ -173,10 +188,10 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 
 	private function default_models() {
 		return array(
-			array( 'id' => 'aihorde/stable_diffusion', 'label' => 'AI Horde Stable Diffusion (Verified Working)' ),
-			array( 'id' => 'aihorde/Flux.1-Schnell fp8 (Compact)', 'label' => 'AI Horde FLUX.1 Schnell' ),
-			array( 'id' => 'aihorde/AlbedoBase XL (SDXL)', 'label' => 'AI Horde AlbedoBase XL' ),
-			array( 'id' => 'aihorde/SDXL 1.0', 'label' => 'AI Horde SDXL 1.0' ),
+			array( 'id' => 'antigravity/gemini-3.1-flash-image', 'label' => 'Google Imagen 3.1 (OmniRoute - Recommended)' ),
+			array( 'id' => 'nvidia/black-forest-labs/flux.1-dev', 'label' => 'FLUX.1 Dev (NVIDIA NIM)' ),
+			array( 'id' => 'pol/tongyi-mai/z-image-turbo', 'label' => 'Z-Image Turbo HD' ),
+			array( 'id' => 'codex/gpt-image-2.5-flare', 'label' => 'GPT Image 2.5 Flare' ),
 		);
 	}
 }

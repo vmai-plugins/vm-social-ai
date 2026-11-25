@@ -28,9 +28,9 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 		$key      = VMSAI_Settings::credential( 'omniroute_key' );
 		$base_url = VMSAI_Settings::credential( 'omniroute_url' );
 		$saved_m  = VMSAI_Settings::get( 'text_model', array() );
-		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'auto/best-coding' );
-		if ( empty( $model ) ) {
-			$model = 'auto/best-coding';
+		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'antigravity/gemini-3-flash' );
+		if ( empty( $model ) || 'auto/best-coding' === $model || 'auto/best-chat' === $model ) {
+			$model = 'antigravity/gemini-3-flash';
 		}
 
 		$messages = array(
@@ -59,6 +59,20 @@ class VMSAI_Text_OmniRoute implements VMSAI_Text_Provider {
 				'timeout' => 60,
 			)
 		);
+
+		if ( ! $response['ok'] && 404 === (int) ( $response['status'] ?? 0 ) && 'antigravity/gemini-3-flash' !== $model ) {
+			$model            = 'antigravity/gemini-3-flash';
+			$payload['model'] = $model;
+			$response         = VMSAI_Http::post(
+				rtrim( $base_url, '/' ) . '/chat/completions',
+				array(
+					'headers' => array( 'Authorization' => 'Bearer ' . $key ),
+					'json'    => $payload,
+					'scope'   => 'engine.text.omniroute',
+					'timeout' => 60,
+				)
+			);
+		}
 
 		if ( ! $response['ok'] ) {
 			return array( 'ok' => false, 'text' => '', 'model' => '', 'error' => $response['error'], 'status' => (int) ( $response['status'] ?? 0 ) );
