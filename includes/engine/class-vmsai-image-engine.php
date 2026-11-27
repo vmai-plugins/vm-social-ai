@@ -147,17 +147,13 @@ class VMSAI_Image_Engine {
 		$stock    = array_values( array_intersect( $chain, self::stock_providers() ) );
 		$generate = array_values( array_diff( $chain, $stock ) );
 
-		// Pollinations needs no key, so it is the guaranteed floor generator —
-		// but only when the operator left it configured. If they removed it
-		// from image_chain on purpose, respect that; if their whole chain
-		// is currently unusable (tripped breakers / missing keys), fall back
-		// to it rather than failing outright.
+		// Only include Pollinations if explicitly kept in Settings -> image_chain; never force-inject it when disabled.
 		$configured     = array_map( 'strval', (array) VMSAI_Settings::get( 'image_chain', array() ) );
 		$poll_configured = in_array( 'pollinations', $configured, true );
 		$poll_usable     = isset( $this->providers['pollinations'] )
 			&& $this->providers['pollinations']->is_configured()
 			&& VMSAI_Circuit::is_open( 'image:pollinations' );
-		if ( ! in_array( 'pollinations', $generate, true ) && $poll_usable && ( $poll_configured || empty( $generate ) ) ) {
+		if ( ! in_array( 'pollinations', $generate, true ) && $poll_usable && $poll_configured ) {
 			$generate[] = 'pollinations';
 		}
 
@@ -428,7 +424,8 @@ class VMSAI_Image_Engine {
 		$mark_id = (int) VMSAI_Settings::get( 'watermark_id' );
 		$mark    = $mark_id ? get_attached_file( $mark_id ) : '';
 
-		if ( ! $mark || ! file_exists( $mark ) ) {
+		// Only overlay transparent PNG logos; skip opaque JPG/WEBP logos to prevent square box stickers.
+		if ( ! $mark || ! file_exists( $mark ) || 'png' !== strtolower( (string) pathinfo( $mark, PATHINFO_EXTENSION ) ) ) {
 			return;
 		}
 

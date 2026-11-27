@@ -34,92 +34,107 @@ class VMSAI_Image_OmniRoute implements VMSAI_Image_Provider {
 	}
 
 	/**
-	 * Create an image.
+	 * Create an image, failing over cleanly across healthy OmniRoute image models.
 	 */
 	public function create( $prompt, array $args = array() ) {
 		$key      = VMSAI_Settings::credential( 'omniroute_key' );
 		$base_url = VMSAI_Settings::credential( 'omniroute_url' );
 		$saved_m  = VMSAI_Settings::get( 'image_model', array() );
-		$model    = $args['model'] ?? ( $saved_m['omniroute'] ?? 'antigravity/gemini-3.1-flash-image' );
+		$primary  = $args['model'] ?? ( $saved_m['omniroute'] ?? 'antigravity/gemini-3.1-flash-image' );
 
-		if ( empty( $model ) || 'flux' === $model || 'aihorde/stable_diffusion' === $model ) {
-			$model = 'antigravity/gemini-3.1-flash-image';
+		if ( empty( $primary ) || 'flux' === $primary || 'aihorde/stable_diffusion' === $primary ) {
+			$primary = 'nvidia/black-forest-labs/flux.1-schnell';
 		}
 
-		// Inject Elite Indian Travel / Pilgrimage Photographic Prompt Enhancer
+		// Clean architectural/editorial prompt enhancement without negative trigger tokens that confuse Flux.
 		$enhanced_prompt = $this->enhance_prompt( $prompt );
+		$candidates      = array_values( array_unique( array(
+			$primary,
+			'nvidia/black-forest-labs/flux.1-schnell',
+			'gemini/gemini-3.1-flash-image-preview',
+			'antigravity/gemini-3.1-flash-image',
+		) ) );
 
-		$payload = array(
-			'model'  => $model,
-			'prompt' => $enhanced_prompt,
-			'n'      => 1,
-			'size'   => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
-		);
+		$last_error = __( 'OmniRoute returned no usable image.', 'vm-social-ai-pro' );
+		foreach ( $candidates as $model ) {
+			$payload = array(
+				'model'  => $model,
+				'prompt' => $enhanced_prompt,
+				'n'      => 1,
+				'size'   => $this->nearest_size( $args['width'] ?? 1024, $args['height'] ?? 1024 ),
+			);
 
-		$response = VMSAI_Http::post(
-			rtrim( $base_url, '/' ) . '/images/generations',
-			array(
-				'headers' => array( 'Authorization' => 'Bearer ' . $key ),
-				'json'    => $payload,
-				'scope'   => 'engine.image.omniroute',
-				'timeout' => 60,
-				'retries' => 1,
-			)
-		);
+			$response = VMSAI_Http::post(
+				rtrim( $base_url, '/' ) . '/images/generations',
+				array(
+					'headers' => array( 'Authorization' => 'Bearer ' . $key ),
+					'json'    => $payload,
+					'scope'   => 'engine.image.omniroute',
+					'timeout' => 30,
+					'retries' => 0,
+				)
+			);
 
-		if ( ! $response['ok'] ) {
-			return $this->fail( $response['error'] );
-		}
-
-		$binary = '';
-		$b64 = $response['json']['data'][0]['b64_json'] ?? $response['json']['data'][0]['b64'] ?? '';
-		if ( $b64 ) {
-			$binary = base64_decode( $b64, true ) ?: '';
-		}
-
-		// Some proxies might return a URL instead of b64
-		if ( empty( $binary ) ) {
-			$url = $response['json']['data'][0]['url'] ?? $response['json']['url'] ?? '';
-			if ( $url ) {
-				$binary = VMSAI_Http::fetch_binary( $url, 45 ) ?: '';
+			if ( ! $response['ok'] ) {
+				$last_error = $response['error'] ?: $last_error;
+				continue;
 			}
-		}
 
-		if ( empty( $binary ) ) {
-			return $this->fail( __( 'OmniRoute returned no usable image.', 'vm-social-ai-pro' ) );
-		}
+			$binary = '';
+			$b64 = $response['json']['data'][0]['b64_json'] ?? $response['json']['data'][0]['b64'] ?? '';
+			if ( $b64 ) {
+				$binary = base64_decode( $b64, true ) ?: '';
+			}
 
-		// Accurate MIME detection from binary magic bytes
-		$mime = 'image/png';
-		if ( 0 === strncmp( $binary, 'RIFF', 4 ) && 'WEBP' === substr( $binary, 8, 4 ) ) {
-			$mime = 'image/webp';
-		} elseif ( 0 === strncmp( $binary, "\xFF\xD8\xFF", 3 ) ) {
-			$mime = 'image/jpeg';
-		} elseif ( 0 === strncmp( $binary, "\x89PNG", 4 ) ) {
+			// Some proxies might return a URL instead of b64.
+			if ( empty( $binary ) ) {
+				$url = $response['json']['data'][0]['url'] ?? $response['json']['url'] ?? '';
+				if ( $url ) {
+					$binary = VMSAI_Http::fetch_binary( $url, 30 ) ?: '';
+				}
+			}
+
+			if ( empty( $binary ) ) {
+				continue;
+			}
+
+			// Accurate MIME detection from binary magic bytes.
 			$mime = 'image/png';
+			if ( 0 === strncmp( $binary, 'RIFF', 4 ) && 'WEBP' === substr( $binary, 8, 4 ) ) {
+				$mime = 'image/webp';
+			} elseif ( 0 === strncmp( $binary, "\xFF\xD8\xFF", 3 ) ) {
+				$mime = 'image/jpeg';
+			} elseif ( 0 === strncmp( $binary, "\x89PNG", 4 ) ) {
+				$mime = 'image/png';
+			}
+
+			return array(
+				'ok'     => true,
+				'binary' => $binary,
+				'url'    => '',
+				'mime'   => $mime,
+				'credit' => 'Generated via OmniRoute (' . $model . ')',
+				'error'  => '',
+			);
 		}
 
-		return array(
-			'ok'     => true,
-			'binary' => $binary,
-			'url'    => '',
-			'mime'   => $mime,
-			'credit' => 'Generated via OmniRoute (' . $model . ')',
-			'error'  => '',
-		);
+		return $this->fail( $last_error );
 	}
 
 	/**
-	 * Enhances the prompt with realistic Indian photography context and excludes models/watermarks.
+	 * Enhances the prompt with authentic architectural photography cues and strips diffusion trigger phrases.
 	 */
 	private function enhance_prompt( $prompt ) {
-		$clean = trim( $prompt );
+		$clean = trim( (string) $prompt );
 		$clean = preg_replace( '/^Style:\s*PHOTO-REALISTIC VISUAL BRIEF\.\s*/i', '', $clean );
+		// Strip "NO fashion models / runway clothing / caucasian model" phrases because Flux draws words even after "NO" or "--no".
+		$clean = preg_replace( '/\bStrictly\s+NO\s+[^.!?\n]+[.!?]?/i', '', $clean );
+		$clean = preg_replace( '/--no\s+.*$/is', '', $clean );
+		$clean = trim( preg_replace( '/\s+/', ' ', $clean ) );
 
-		$quality_guardrail  = 'Award-winning National Geographic travel photography, authentic Indian atmosphere, rich natural colors, crisp golden hour lighting, 8k resolution, shot on Sony A7R V with 35mm f/1.8 lens, sharp focus, highly detailed textures';
-		$negative_guardrail = '--no fashion model, western woman, sunglasses, runway glamour, studio portrait, caucasian model, makeup, lingerie, plastic skin, distorted vehicle, cartoon, 3d render, watermark, text, lowres, blur';
+		$quality_guardrail = 'Authentic Indian travel & heritage documentary photography, sacred stone architecture, tranquil river ghats, golden hour natural light, 8k resolution, sharp focus, clean landscape frame';
 
-		return $quality_guardrail . '. ' . $clean . ' ' . $negative_guardrail;
+		return $quality_guardrail . '. ' . $clean;
 	}
 
 	private function fail( $error ) {

@@ -334,16 +334,28 @@ class VMSAI_Scheduler {
 		$per_channel_cap = max( 1, (int) ceil( $daily_cap / $channel_count ) );
 
 		$published_by_channel = array();
+		$last_pub_by_channel  = array();
 		foreach ( (array) $wpdb->get_results( // phpcs:ignore
-			"SELECT channel, COUNT(*) AS c FROM `$table` WHERE status = 'published' AND published_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY) GROUP BY channel",
+			"SELECT channel, COUNT(*) AS c, MAX(published_at) AS last_pub FROM `$table` WHERE status = 'published' AND published_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY) GROUP BY channel",
 			ARRAY_A
 		) as $count_row ) {
 			$published_by_channel[ $count_row['channel'] ] = (int) $count_row['c'];
+			if ( ! empty( $count_row['last_pub'] ) ) {
+				$last_pub_by_channel[ $count_row['channel'] ] = (int) strtotime( $count_row['last_pub'] . ' UTC' );
+			}
 		}
+
+		$channel_cooldown = (int) apply_filters( 'vmsai_channel_cooldown', 2 * HOUR_IN_SECONDS );
 
 		foreach ( $rows as $row ) {
 			if ( $this->is_quiet_hours() ) {
 				break;
+			}
+
+			// Enforce per-channel spacing cooldown so overdue queues never burst-publish back-to-back.
+			$last_pub_ts = (int) ( $last_pub_by_channel[ $row['channel'] ] ?? 0 );
+			if ( $channel_cooldown > 0 && $last_pub_ts > 0 && ( time() - $last_pub_ts ) < $channel_cooldown ) {
+				continue;
 			}
 
 			// Per-channel cap: skip this row (leave it approved and due) once
@@ -414,6 +426,7 @@ class VMSAI_Scheduler {
 
 				$published++;
 				$published_by_channel[ $row['channel'] ] = ( $published_by_channel[ $row['channel'] ] ?? 0 ) + 1;
+				$last_pub_by_channel[ $row['channel'] ]  = time();
 
 				if ( ! empty( $row['first_comment'] ) && ! empty( $result['remote_id'] ) ) {
 					$channel->post_comment( $result['remote_id'], (string) $row['first_comment'] );

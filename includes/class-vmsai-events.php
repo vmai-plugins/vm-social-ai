@@ -149,13 +149,28 @@ class VMSAI_Events {
 			return;
 		}
 
+		global $wpdb;
+		$plan_table = VMSAI_Install::table( 'plan' );
+
+		// Deduplicate per post_id over a 7-day window so post updates never flood duplicate social slots.
+		if ( $post_id > 0 ) {
+			$already_queued = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM `$plan_table` WHERE post_id = %d AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)", // phpcs:ignore
+					(int) $post_id
+				)
+			);
+			if ( $already_queued > 0 ) {
+				return;
+			}
+		}
+
 		$seo_keywords = VMSAI_SEO::get_keywords( $post_id );
 		$brief_context = $snippet ? "\nCONTENT SNIPPET: " . $snippet : '';
 
 		// Pro Feature: VM SEO Brain Context Sync.
 		// Pull the original editorial brief to give the social AI deep understanding.
 		if ( $post_id && class_exists( 'VMSB_Core' ) ) {
-			global $wpdb;
 			$table = $wpdb->prefix . 'vmsb_plan';
 			$plan_row = $wpdb->get_row( $wpdb->prepare( "SELECT brief, intent FROM `$table` WHERE post_id = %d LIMIT 1", $post_id ) );
 			if ( $plan_row ) {
@@ -166,12 +181,11 @@ class VMSAI_Events {
 			}
 		}
 
-		global $wpdb;
 		$channels = (array) json_decode( (string) $campaign['channels'], true );
 
-		// High-converting Sovereign CTA for VM Studio
-		$vm_cta = "\nCALL TO ACTION: Invite the audience to modernize their business with VM Studio: Sovereign Custom Web Architecture, Autonomous AI Voice Telephony & Enterprise WhatsApp CRM. Visit https://vmstudio.digital or message on WhatsApp (+91 83683 16403). Official Article Link: " . $link;
-		$enriched_angle = $link . $brief_context . $vm_cta;
+		// Dynamic site CTA instead of hardcoded agency branding.
+		$site_cta       = "\nCALL TO ACTION: Invite readers to explore more guides or book directly via " . get_bloginfo( 'name' ) . ' (' . home_url( '/' ) . '). Official Article Link: ' . $link;
+		$enriched_angle = $link . $brief_context . $site_cta;
 
 		// Multi-Format Social Strategy: Carousels, 9:16 Video Reels, Infographics & Thought Leadership
 		$channel_formats = array(
@@ -181,8 +195,6 @@ class VMSAI_Events {
 			'youtube'   => array( 'short' ),
 			'x'         => array( 'image' ),
 		);
-
-		$plan_table = VMSAI_Install::table( 'plan' );
 
 		foreach ( $channels as $channel ) {
 			$formats = isset( $channel_formats[ $channel ] ) ? $channel_formats[ $channel ] : array( 'image' );

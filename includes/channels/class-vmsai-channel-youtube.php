@@ -99,20 +99,24 @@ class VMSAI_Channel_Youtube extends VMSAI_Channel {
 			return $this->fail( __( 'No video source could be produced.', 'vm-social-ai-pro' ) );
 		}
 
-		$title = mb_substr( wp_strip_all_tags( (string) $post['title'] ), 0, 95 );
+		$title = str_replace( array( '<', '>' ), '', wp_strip_all_tags( (string) $post['title'] ) );
+		$title = trim( preg_replace( '/[\x00-\x1F\x7F]+/u', ' ', $title ) );
+		$title = mb_substr( $title ?: 'Travel Guide', 0, 95 );
 
 		// The #Shorts tag in the description is what classifies the upload,
 		// so it must survive truncation — reserve its room first instead of
 		// appending it and then capping the whole string, which could slice
 		// the tag off a caption that's already close to the 4900 limit.
+		$raw_cap     = str_replace( array( '<', '>' ), '', wp_strip_all_tags( $this->caption( $post, true, true ) ) );
+		$raw_cap     = trim( preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/u', '', $raw_cap ) );
 		$shorts_tag  = "\n\n#Shorts";
-		$body_limit  = 4900 - mb_strlen( $shorts_tag );
-		$description = trim( mb_substr( $this->caption( $post, true, true ), 0, $body_limit ) . $shorts_tag );
+		$body_limit  = 4800 - strlen( $shorts_tag );
+		$description = trim( mb_strcut( $raw_cap, 0, $body_limit, 'UTF-8' ) . $shorts_tag );
 
 		$metadata = array(
 			'snippet' => array(
 				'title'       => $title,
-				'description' => mb_substr( $description, 0, 4900 ),
+				'description' => mb_strcut( $description, 0, 4900, 'UTF-8' ),
 				'tags'        => $this->tags( $post ),
 				'categoryId'  => '22',
 			),
