@@ -154,6 +154,7 @@ abstract class VMSAI_Channel {
 		}
 
 		if ( $url ) {
+			$url = VMSAI_Image_Engine::ensure_jpeg_url( $url, (int) ( $post['media_id'] ?? 0 ) );
 			$host = wp_parse_url( $url, PHP_URL_HOST );
 			if ( $host && ( 'localhost' === $host || false !== strpos( $host, '.local' ) || preg_match( '/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/', $host ) ) ) {
 				VMSAI_Logger::warn( 'channel.' . $this->slug(), 'Public networks cannot reach local URLs. Use a tunnel (like Ngrok or LocalWP Live Link) for testing media publishing.', array( 'url' => $url ) );

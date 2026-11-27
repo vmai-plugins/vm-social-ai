@@ -242,9 +242,9 @@ class VMSAI_Image_Engine {
 			$remote_url = get_post_meta( $attachment_id, '_vmsai_remote_url', true );
 			$url = $remote_url ?: (string) wp_get_attachment_url( $attachment_id );
 
-			// Local-safe scheme: Use WordPress standard to match the current protocol,
-			// which prevents SSL mixed-content blocks or broken local links.
-			$url = set_url_scheme( $url );
+			// Always match the site's canonical scheme (prevents CLI cron writing http:// instead of https://).
+			$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME ) ?: 'https';
+			$url    = set_url_scheme( $url, $scheme );
 
 			return array(
 				'ok'            => true,
@@ -312,6 +312,30 @@ class VMSAI_Image_Engine {
 		// Pro Resilience: Generating thumbnails and watermarking are memory intensive.
 		if ( function_exists( 'wp_raise_memory_limit' ) ) {
 			wp_raise_memory_limit( 'image' );
+		}
+
+		// Render branded card/poster typography for carousel slides, banners, and infographics.
+		$card_formats = array( 'banner', 'poster', 'infographic', 'quote_card', 'carousel_slide' );
+		$req_format   = (string) ( $meta['format'] ?? 'image' );
+		$card_title   = (string) ( $meta['card_headline'] ?? '' );
+		if ( class_exists( 'VMSAI_Card_Renderer' ) && ( in_array( $req_format, $card_formats, true ) || '' !== $card_title ) ) {
+			$headline = $card_title ?: (string) ( $meta['topic'] ?? $meta['title'] ?? '' );
+			$rendered = VMSAI_Card_Renderer::render_poster(
+				$upload['file'],
+				array(
+					'headline' => $headline,
+					'subline'  => (string) ( $meta['card_subline'] ?? '' ),
+					'badge'    => (string) ( $meta['card_badge'] ?? '' ),
+					'cta'      => (string) ( $meta['card_cta'] ?? '' ),
+					'out_path' => preg_replace( '/\.[a-z0-9]+$/i', '', $upload['file'] ) . '.jpg',
+				)
+			);
+			if ( $rendered && $rendered !== $upload['file'] && file_exists( $rendered ) ) {
+				@unlink( $upload['file'] );
+				$upload['file'] = $rendered;
+				update_attached_file( $attachment_id, $rendered );
+				wp_update_post( array( 'ID' => $attachment_id, 'post_mime_type' => 'image/jpeg' ) );
+			}
 		}
 
 		// Apply branding BEFORE generating thumbnails so all sizes are branded.
@@ -482,6 +506,78 @@ class VMSAI_Image_Engine {
 
 		imagedestroy( $base );
 		imagedestroy( $logo );
+	}
+
+	/**
+	 * Ensure a local image path is JPEG/PNG (converting WEBP to a -social.jpg sibling).
+	 * Prevents Instagram Graph API WEBP rejections and FFmpeg -loop 1 single-frame bugs.
+	 *
+	 * @param string $path Absolute file path.
+	 * @return string JPEG/PNG path, or original path on fallback.
+	 */
+	public static function ensure_jpeg_file( $path ) {
+		$path = (string) $path;
+		if ( '' === $path || ! file_exists( $path ) ) {
+			return $path;
+		}
+		$ext = strtolower( (string) pathinfo( $path, PATHINFO_EXTENSION ) );
+		if ( 'webp' !== $ext ) {
+			return $path;
+		}
+		$jpg_path = preg_replace( '/\.webp$/i', '', $path ) . '-social.jpg';
+		if ( file_exists( $jpg_path ) && filesize( $jpg_path ) > 1000 ) {
+			return $jpg_path;
+		}
+		if ( function_exists( 'imagecreatefromwebp' ) && function_exists( 'imagejpeg' ) ) {
+			$im = @imagecreatefromwebp( $path );
+			if ( $im ) {
+				$ok = @imagejpeg( $im, $jpg_path, 88 );
+				imagedestroy( $im );
+				if ( $ok && file_exists( $jpg_path ) && filesize( $jpg_path ) > 1000 ) {
+					@chmod( $jpg_path, 0644 );
+					return $jpg_path;
+				}
+			}
+		}
+		return $path;
+	}
+
+	/**
+	 * Normalize a media URL to canonical HTTPS scheme and ensure WEBP URLs resolve to JPEG.
+	 *
+	 * @param string $url           Media URL.
+	 * @param int    $attachment_id Optional WordPress attachment ID.
+	 * @return string
+	 */
+	public static function ensure_jpeg_url( $url, $attachment_id = 0 ) {
+		$url = (string) $url;
+		if ( '' === $url ) {
+			return '';
+		}
+		$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME ) ?: 'https';
+		$url    = set_url_scheme( $url, $scheme );
+
+		if ( preg_match( '/\.webp(?:\?.*)?$/i', $url ) ) {
+			$local = $attachment_id ? get_attached_file( $attachment_id ) : '';
+			if ( ! $local ) {
+				$up   = wp_upload_dir();
+				$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+				$base = (string) wp_parse_url( $up['baseurl'], PHP_URL_PATH );
+				if ( $base && 0 === strpos( $path, $base ) ) {
+					$local = $up['basedir'] . substr( $path, strlen( $base ) );
+				}
+			}
+			if ( $local && file_exists( $local ) ) {
+				$jpg = self::ensure_jpeg_file( $local );
+				if ( $jpg !== $local && file_exists( $jpg ) ) {
+					$up  = wp_upload_dir();
+					$rel = ltrim( str_replace( '\\', '/', str_replace( str_replace( '\\', '/', $up['basedir'] ), '', str_replace( '\\', '/', $jpg ) ) ), '/' );
+					return set_url_scheme( trailingslashit( $up['baseurl'] ) . $rel, $scheme );
+				}
+			}
+		}
+
+		return $url;
 	}
 
 	/**

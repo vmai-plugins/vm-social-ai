@@ -826,43 +826,123 @@ class VMSAI_Video_Engine {
 	}
 
 	/**
-	 * Generate speech from text via ElevenLabs.
+	 * Generate natural voiceover audio from text (ElevenLabs if configured, else local edge-tts en-IN-NeerjaNeural).
+	 *
+	 * @param string $text Narration script.
+	 * @return string|false MP3 file path on success, or false.
 	 */
 	public function text_to_speech( $text ) {
+		$clean = html_entity_decode( wp_strip_all_tags( (string) $text ), ENT_QUOTES, 'UTF-8' );
+		$clean = preg_replace( '/https?:\/\/\S+/i', '', $clean );
+		$clean = preg_replace( '/#[a-zA-Z0-9_]+/', '', $clean );
+		$clean = preg_replace( '/[\x{10000}-\x{10FFFF}]/u', '', $clean );
+		$clean = trim( preg_replace( '/\s+/', ' ', (string) $clean ) );
+		if ( '' === $clean ) {
+			return false;
+		}
+		$clean = mb_substr( $clean, 0, 240 );
+
+		$uploads = wp_upload_dir();
+		$file    = trailingslashit( $uploads['basedir'] ) . 'vmsai-tts-' . uniqid() . '.mp3';
+
 		$key = VMSAI_Settings::credential( 'elevenlabs_key' );
-		if ( ! $key ) return false;
-
-		$voice_id = VMSAI_Settings::get( 'elevenlabs_voice', 'pNInz6ov9TqWwaY67P6D' ); // Default 'Adam'
-		$url = "https://api.elevenlabs.io/v1/text-to-speech/{$voice_id}";
-
-		$res = VMSAI_Http::post( $url, array(
-			'headers' => array( 'xi-api-key' => $key, 'Content-Type' => 'application/json' ),
-			'json'    => array( 'text' => $text, 'model_id' => 'eleven_monolingual_v1' ),
-			'scope'   => 'engine.video.tts'
-		) );
-
-		if ( $res['ok'] && ! empty($res['body']) ) {
-			$uploads = wp_upload_dir();
-			$file = trailingslashit( $uploads['basedir'] ) . 'vmsai-tts-' . uniqid() . '.mp3';
-			file_put_contents( $file, $res['body'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions
-			VMSAI_Usage::record(
-				array(
+		if ( $key ) {
+			$voice_id = VMSAI_Settings::get( 'elevenlabs_voice', 'pNInz6ov9TqWwaY67P6D' );
+			$url      = "https://api.elevenlabs.io/v1/text-to-speech/{$voice_id}";
+			$res      = VMSAI_Http::post( $url, array(
+				'headers' => array( 'xi-api-key' => $key, 'Content-Type' => 'application/json' ),
+				'json'    => array( 'text' => $clean, 'model_id' => 'eleven_monolingual_v1' ),
+				'scope'   => 'engine.video.tts',
+			) );
+			if ( $res['ok'] && ! empty( $res['body'] ) ) {
+				file_put_contents( $file, $res['body'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+				VMSAI_Usage::record( array(
 					'provider'   => 'elevenlabs',
 					'model'      => (string) $voice_id,
 					'modality'   => 'audio',
 					'usage_type' => 'generation',
-					'tokens_in'  => max( 1, (int) ( mb_strlen( (string) $text ) / 4 ) ),
+					'tokens_in'  => max( 1, (int) ( mb_strlen( $clean ) / 4 ) ),
 					'tokens_out' => 1,
-				)
+				) );
+				return $file;
+			}
+		}
+
+		// Local zero-cost Edge Neural TTS fallback (en-IN-NeerjaNeural).
+		$edge_bin = '';
+		foreach ( array( '/usr/local/bin/edge-tts', '/usr/bin/edge-tts' ) as $cand ) {
+			if ( self::is_usable_binary( $cand ) ) {
+				$edge_bin = $cand;
+				break;
+			}
+		}
+		if ( $edge_bin && function_exists( 'exec' ) ) {
+			$cmd = sprintf(
+				'%s --voice en-IN-NeerjaNeural --rate=+4%% --text %s --write-media %s 2>/dev/null',
+				escapeshellcmd( $edge_bin ),
+				escapeshellarg( $clean ),
+				escapeshellarg( $file )
 			);
-			return $file;
+			@exec( $cmd, $tts_out, $tts_rc ); // phpcs:ignore
+			if ( 0 === $tts_rc && file_exists( $file ) && filesize( $file ) > 2000 ) {
+				return $file;
+			}
 		}
 
 		return false;
 	}
 
 	/**
-	 * High-End Production: Finalize a raw video or image into a branded social asset.
+	 * Probe duration in seconds of an audio/video file via ffprobe.
+	 *
+	 * @param string $ffmpeg Path to ffmpeg binary.
+	 * @param string $path   Media file path.
+	 * @return float Duration in seconds (0.0 on failure).
+	 */
+	private static function probe_duration( $ffmpeg, $path ) {
+		if ( ! $path || ! file_exists( $path ) || ! function_exists( 'shell_exec' ) ) {
+			return 0.0;
+		}
+		$ffprobe = preg_replace( '/ffmpeg(\.exe)?$/i', 'ffprobe$1', $ffmpeg );
+		if ( ! self::is_usable_binary( $ffprobe ) ) {
+			$out = (string) @shell_exec( escapeshellcmd( $ffmpeg ) . ' -i ' . escapeshellarg( $path ) . ' 2>&1' ); // phpcs:ignore
+			if ( preg_match( '/Duration:\s*(\d+):(\d+):([\d.]+)/', $out, $m ) ) {
+				return ( (int) $m[1] * 3600 ) + ( (int) $m[2] * 60 ) + (float) $m[3];
+			}
+			return 0.0;
+		}
+		$cmd = escapeshellcmd( $ffprobe ) . ' -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ' . escapeshellarg( $path ) . ' 2>/dev/null';
+		return (float) trim( (string) @shell_exec( $cmd ) ); // phpcs:ignore
+	}
+
+	/**
+	 * Build a visual destination query suitable for stock video lookup.
+	 *
+	 * @param array $post Queue row.
+	 * @return string
+	 */
+	private static function visual_search_query( array $post ) {
+		$hay = strtolower( (string) ( ( $post['title'] ?? '' ) . ' ' . ( $post['image_prompt'] ?? '' ) ) );
+		if ( preg_match( '/varanasi|kashi|ganga|ghat|aarti|boat/', $hay ) ) {
+			return 'varanasi ghats ganga india';
+		}
+		if ( preg_match( '/ayodhya|ram|mandir|saryu|temple|naimisharanya|chitrakoot|darshan/', $hay ) ) {
+			return 'indian hindu temple architecture';
+		}
+		if ( preg_match( '/prayagraj|sangam|kumbh|mela/', $hay ) ) {
+			return 'india sacred river sunrise';
+		}
+		if ( preg_match( '/cab|taxi|innova|tempo|road|airport/', $hay ) ) {
+			return 'india highway car travel';
+		}
+		if ( preg_match( '/food|chaat|street|kachori|chai/', $hay ) ) {
+			return 'indian street food traditional';
+		}
+		return 'india spiritual temple heritage';
+	}
+
+	/**
+	 * High-End Production: Produce a 1080x1920 30fps vertical Reel/Short with voiceover & readable typography.
 	 *
 	 * @param array  $post     Queue row.
 	 * @param string $provider Optional provider override.
@@ -878,137 +958,152 @@ class VMSAI_Video_Engine {
 		$uploads = wp_upload_dir();
 		$output  = trailingslashit( $uploads['basedir'] ) . 'vmsai-prod-' . uniqid() . '.mp4';
 
-		// 1. Determine Source (Video Binary vs Image Path)
+		$hook = trim( html_entity_decode( wp_strip_all_tags( (string) ( $post['video_hook'] ?? '' ) ), ENT_QUOTES, 'UTF-8' ) );
+		$hook = preg_replace( '/[\x{10000}-\x{10FFFF}]/u', '', $hook );
+		$hook = trim( (string) $hook );
+
+		$raw_body = html_entity_decode( wp_strip_all_tags( (string) ( $post['body'] ?? '' ) ), ENT_QUOTES, 'UTF-8' );
+		$raw_body = preg_replace( '/https?:\/\/\S+/i', '', $raw_body );
+		$raw_body = preg_replace( '/#[a-zA-Z0-9_]+/', '', $raw_body );
+		$raw_body = preg_replace( '/[\x{10000}-\x{10FFFF}]/u', '', $raw_body );
+		$raw_body = trim( preg_replace( '/\s+/', ' ', (string) $raw_body ) );
+
+		// 1. Voiceover Audio FIRST so video duration matches real narration length cleanly.
+		$narration_text = trim( ( $hook ? $hook . '. ' : '' ) . wp_trim_words( $raw_body, 22, '' ) );
+		$tts_file       = $narration_text ? $this->text_to_speech( $narration_text ) : false;
+		$tts_dur        = $tts_file ? self::probe_duration( $ffmpeg, $tts_file ) : 0.0;
+		$duration       = ( $tts_dur > 1.0 ) ? max( 8, min( 16, (int) ceil( $tts_dur + 1.2 ) ) ) : 9;
+
+		// 2. Determine Source (Video Binary vs Ken Burns Safe JPEG).
 		$source_video = '';
 		$source_image = '';
+		$video_topic  = self::visual_search_query( $post );
+		$gen_res      = $this->create( $video_topic, $post['video_template'] ?? 'cinematic_product', $provider );
 
-		// Check if we have a generated video binary first
-		$video_topic = ! empty($post['video_hook']) ? $post['video_hook'] : ($post['title'] ?: $post['body']);
-		$gen_res = $this->create( $video_topic, $post['video_template'] ?? 'cinematic_product', $provider );
+		if ( ! empty( $gen_res['ok'] ) && ! empty( $gen_res['binary'] ) ) {
+			$cand_vid = trailingslashit( $uploads['basedir'] ) . 'vmsai-raw-' . uniqid() . '.mp4';
+			file_put_contents( $cand_vid, $gen_res['binary'] );
+			if ( self::probe_duration( $ffmpeg, $cand_vid ) >= 1.5 ) {
+				$source_video = $cand_vid;
+			} else {
+				@unlink( $cand_vid );
+			}
+		}
 
-		if ( $gen_res['ok'] && $gen_res['binary'] ) {
-			$source_video = trailingslashit( $uploads['basedir'] ) . 'vmsai-raw-' . uniqid() . '.mp4';
-			file_put_contents( $source_video, $gen_res['binary'] );
-		} else {
-			// Fallback to Image Source (Ken Burns)
-			$image_id = (int) $post['media_id'];
-			$source_image = $image_id ? get_attached_file( $image_id ) : '';
+		if ( ! $source_video ) {
+			$image_id = (int) ( $post['media_id'] ?? 0 );
+			$img_path = $image_id ? get_attached_file( $image_id ) : '';
+			if ( ( ! $img_path || ! file_exists( $img_path ) ) && class_exists( 'VMSAI_Image_Engine' ) ) {
+				$img_res  = vmsai()->image_engine()->create( $video_topic, array( 'channel' => 'instagram', 'format' => 'image' ) );
+				$img_path = ! empty( $img_res['attachment_id'] ) ? get_attached_file( (int) $img_res['attachment_id'] ) : '';
+			}
+			if ( $img_path && file_exists( $img_path ) ) {
+				// Critical: Convert WEBP -> JPEG so FFmpeg -loop 1 never emits a 1-frame 0.04s output.
+				$source_image = class_exists( 'VMSAI_Image_Engine' ) ? VMSAI_Image_Engine::ensure_jpeg_file( $img_path ) : $img_path;
+			}
 		}
 
 		if ( ! $source_video && ! $source_image ) {
+			if ( $tts_file && file_exists( $tts_file ) ) {
+				@unlink( $tts_file );
+			}
 			return '';
 		}
 
-		// 2. Branding Assets
-		$mark_id = (int) VMSAI_Settings::get( 'watermark_id' );
-		$logo    = ( VMSAI_Settings::get( 'brand_watermark' ) && $mark_id ) ? get_attached_file( $mark_id ) : '';
-		$hook    = (string) ( $post['video_hook'] ?? '' );
+		// 3. Branding & Font Assets.
+		$mark_id  = (int) VMSAI_Settings::get( 'watermark_id' );
+		$logo     = ( VMSAI_Settings::get( 'brand_watermark' ) && $mark_id ) ? get_attached_file( $mark_id ) : '';
+		$font_ttf = class_exists( 'VMSAI_Card_Renderer' ) ? VMSAI_Card_Renderer::find_font( true ) : '';
+		$font_opt = $font_ttf ? ( "fontfile='" . str_replace( array( '\\', ':', "'" ), array( '/', '\\:', "\\'" ), $font_ttf ) . "'" ) : "font='Sans'";
 
-		// 3. Construct FFmpeg Filters
-		$filters = array();
-		$inputs  = array();
-		$in_idx  = 0;
+		// 4. Construct FFmpeg Filters (loop clip/image cleanly to exact $duration at 30fps).
+		$filters      = array();
+		$inputs       = array();
+		$in_idx       = 0;
+		$total_frames = $duration * 30;
 
 		if ( $source_video ) {
-			$inputs[] = "-i " . escapeshellarg( $source_video );
-			$filters[] = "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v0]";
+			$inputs[]  = '-stream_loop -1 -i ' . escapeshellarg( $source_video );
+			$filters[] = '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setpts=PTS-STARTPTS[v0]';
 		} else {
-			$inputs[] = "-loop 1 -i " . escapeshellarg( $source_image );
-			$filters[] = "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0006,1.12)':d=240:s=1080x1920:fps=30[v0]";
+			$inputs[]  = '-loop 1 -framerate 30 -t ' . $duration . ' -i ' . escapeshellarg( $source_image );
+			$filters[] = "[0:v]scale=1280:2276:force_original_aspect_ratio=increase,crop=1280:2276,zoompan=z='min(zoom+0.0007,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={$total_frames}:s=1080x1920:fps=30[v0]";
 		}
 		$in_idx++;
+		$last_v = 'v0';
 
-		$last_v = "v0";
-
-		// Overlay Logo
-		if ( $logo && file_exists( $logo ) ) {
-			$inputs[] = "-i " . escapeshellarg( $logo );
-			$filters[] = "[{$in_idx}:v]scale=180:-1[logo]";
-			$filters[] = "[{$last_v}][logo]overlay=W-w-40:40[v_logo]";
-			$last_v = "v_logo";
+		if ( $logo && file_exists( $logo ) && 'png' === strtolower( (string) pathinfo( $logo, PATHINFO_EXTENSION ) ) ) {
+			$inputs[]  = '-i ' . escapeshellarg( $logo );
+			$filters[] = "[{$in_idx}:v]scale=160:-1[logo]";
+			$filters[] = "[{$last_v}][logo]overlay=W-w-44:54[v_logo]";
+			$last_v    = 'v_logo';
 			$in_idx++;
 		}
 
-		// PRO: Burned-in Dynamic Subtitles (Modern frosted black pill with crisp white typography)
-		$body = wp_strip_all_tags( $post['body'] );
-		$body = preg_replace( '/#[a-zA-Z0-9_]+/', '', $body ); // Strip hashtags
-		$words = array_filter( explode( ' ', trim($body) ) );
-		$chunk_size = 3; // Words per subtitle block
-		$chunks = array_chunk( $words, $chunk_size );
-		$duration = 8; // Total video duration
-		$time_per_chunk = $duration / max( 1, count($chunks) );
+		// Top subtle brand badge pill (textfile/drawtext).
+		$brand_lbl = self::escape_drawtext( strtoupper( get_bloginfo( 'name' ) ?: 'TRIPCOSMOS.CO' ) );
+		$filters[] = "[{$last_v}]drawtext=text='{$brand_lbl}':{$font_opt}:fontcolor=#0F172A:fontsize=30:x=64:y=92:box=1:boxcolor=#F59E0B@0.95:boxborderw=18[v_brand]";
+		$last_v    = 'v_brand';
 
-		foreach ( $chunks as $i => $chunk ) {
-			$text = strtoupper( implode( ' ', $chunk ) );
-			$safe_text = self::escape_drawtext( $text );
-			$start = $i * $time_per_chunk;
-			$end = ( $i + 1 ) * $time_per_chunk;
-
-			// Subtitle Filter: Bottom-centered, modern pill card, crisp white text
-			$sub_filter = "drawtext=text='{$safe_text}':fontcolor=white:fontsize=52:font='Sans':x=(w-text_w)/2:y=h-360:enable='between(t,{$start},{$end})':box=1:boxcolor=black@0.75:boxborderw=24:shadowcolor=black@0.5:shadowx=2:shadowy=2";
-			$filters[] = "[{$last_v}]{$sub_filter}[v_sub{$i}]";
-			$last_v = "v_sub{$i}";
+		// Bottom readable caption phrases synced evenly across $duration (5-6 words per card, min ~2s).
+		$sub_words = array_slice( array_filter( explode( ' ', $raw_body ) ), 0, 24 );
+		if ( ! empty( $sub_words ) ) {
+			$chunks         = array_chunk( $sub_words, 5 );
+			$time_per_chunk = $duration / max( 1, count( $chunks ) );
+			foreach ( $chunks as $i => $chunk ) {
+				$text      = wordwrap( implode( ' ', $chunk ), 28, "\n" );
+				$safe_text = self::escape_drawtext( $text );
+				$start     = round( $i * $time_per_chunk, 2 );
+				$end       = round( ( $i + 1 ) * $time_per_chunk, 2 );
+				$filters[] = "[{$last_v}]drawtext=text='{$safe_text}':{$font_opt}:fontcolor=white:fontsize=46:x=(w-text_w)/2:y=h-330:enable='between(t,{$start},{$end})':box=1:boxcolor=#0F172A@0.78:boxborderw=26:line_spacing=12[v_sub{$i}]";
+				$last_v    = "v_sub{$i}";
+			}
 		}
 
-		// Overlay Text Hook (Dynamic font-scaling with textfile to eliminate newline \n escaping bugs)
+		// Top-upper Hook Headline banner (leaves middle scenery unobstructed).
 		$hook_file = null;
 		if ( $hook ) {
-			$hook_len = mb_strlen( $hook );
-			$wrap_chars = 18;
-			$fontsize = 68;
-			if ( $hook_len > 55 ) {
-				$fontsize = 48;
-				$wrap_chars = 26;
-			} elseif ( $hook_len > 32 ) {
-				$fontsize = 58;
-				$wrap_chars = 22;
-			}
-
-			$wrapped_hook = wordwrap( strtoupper( $hook ), $wrap_chars, "\n" );
-			$hook_file = tempnam( sys_get_temp_dir(), 'vmsai_hk_' ) . '.txt';
-			file_put_contents( $hook_file, $wrapped_hook );
-
-			// In FFmpeg drawtext, escaping colon and backslash for the textfile parameter prevents any shell/filter expansion corruption
+			$hook_len   = mb_strlen( $hook );
+			$wrap_chars = ( $hook_len > 48 ) ? 24 : 18;
+			$fontsize   = ( $hook_len > 48 ) ? 46 : 56;
+			$hook_file  = tempnam( sys_get_temp_dir(), 'vmsai_hk_' ) . '.txt';
+			file_put_contents( $hook_file, wordwrap( strtoupper( $hook ), $wrap_chars, "\n" ) );
 			$safe_hook_path = str_replace( array( '\\', ':', "'" ), array( '/', '\\:', "\\'" ), $hook_file );
-
-			// Pro Text Filter: Centered, high-contrast semi-transparent backdrop card
-			$text_filter = "drawtext=textfile='{$safe_hook_path}':fontcolor=white:fontsize={$fontsize}:font='Sans':x=(w-text_w)/2:y=(h-text_h)/2-120:box=1:boxcolor=black@0.70:boxborderw=36:shadowcolor=black@0.5:shadowx=3:shadowy=3:line_spacing=18";
-			$filters[] = "[{$last_v}]{$text_filter}[v_text]";
-			$last_v = "v_text";
+			$filters[]      = "[{$last_v}]drawtext=textfile='{$safe_hook_path}':{$font_opt}:fontcolor=white:fontsize={$fontsize}:x=64:y=180:box=1:boxcolor=#0F172A@0.72:boxborderw=26:line_spacing=14[v_text]";
+			$last_v         = 'v_text';
 		}
 
-		// Add Audio (Priority: TTS > Background Vibe > Silence)
-		$tts_file = $hook ? $this->text_to_speech( $hook ) : false;
-		$audio_input = "";
-
+		// Audio track: Voiceover (padded to full $duration) or soft ambient tone pad.
 		if ( $tts_file && file_exists( $tts_file ) ) {
-			$inputs[] = "-i " . escapeshellarg( $tts_file );
-			$audio_input = "-map {$in_idx}:a";
-			$in_idx++;
+			$inputs[]    = '-i ' . escapeshellarg( $tts_file );
+			$filters[]   = "[{$in_idx}:a]apad,atrim=0:{$duration},asetpts=PTS-STARTPTS[a_out]";
+			$audio_map   = '-map "[a_out]"';
 		} else {
-			$inputs[] = "-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100";
-			$audio_input = "-map {$in_idx}:a";
-			$in_idx++;
+			$inputs[]    = '-f lavfi -t ' . $duration . ' -i anullsrc=channel_layout=stereo:sample_rate=44100';
+			$audio_map   = "-map {$in_idx}:a";
 		}
 
 		$command = sprintf(
-			'%s -y %s -filter_complex %s -map "[%s]" %s -c:v libx264 -profile:v high -pix_fmt yuv420p -c:a aac -shortest -t 8 %s 2>&1',
+			'%s -y %s -filter_complex %s -map "[%s]" %s -t %d -c:v libx264 -profile:v high -pix_fmt yuv420p -c:a aac -movflags +faststart %s 2>&1',
 			escapeshellcmd( $ffmpeg ),
 			implode( ' ', $inputs ),
 			escapeshellarg( implode( ';', $filters ) ),
 			$last_v,
-			$audio_input,
+			$audio_map,
+			$duration,
 			escapeshellarg( $output )
 		);
 
 		@exec( $command, $out, $status );
 
-		if ( $source_video && file_exists($source_video) ) @unlink($source_video);
-		if ( $tts_file && file_exists($tts_file) ) @unlink($tts_file);
+		if ( $source_video && file_exists( $source_video ) ) @unlink( $source_video );
+		if ( $tts_file && file_exists( $tts_file ) ) @unlink( $tts_file );
 		if ( ! empty( $hook_file ) && file_exists( $hook_file ) ) @unlink( $hook_file );
 
-		if ( 0 !== $status || ! file_exists( $output ) ) {
-			VMSAI_Logger::error( 'engine.video', 'Production failed.', array( 'status' => $status, 'cmd' => $command ) );
+		$out_dur = ( 0 === $status && file_exists( $output ) ) ? self::probe_duration( $ffmpeg, $output ) : 0.0;
+		if ( 0 !== $status || ! file_exists( $output ) || $out_dur < 4.0 ) {
+			if ( file_exists( $output ) ) @unlink( $output );
+			VMSAI_Logger::error( 'engine.video', 'Production failed or duration too short.', array( 'status' => $status, 'duration' => $out_dur, 'tail' => array_slice( (array) $out, -6 ) ) );
 			return '';
 		}
 

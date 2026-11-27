@@ -403,14 +403,35 @@ KEY WRITING ATTRIBUTES:
 		$post_id = (int) ( $slot['post_id'] ?? 0 );
 
 		if ( $post_id && has_post_thumbnail( $post_id ) ) {
-			$thumb_id = get_post_thumbnail_id( $post_id );
-			$image = array(
-				'attachment_id' => $thumb_id,
-				'url'           => wp_get_attachment_url( $thumb_id ),
-				'provider'      => 'original',
-				'alt'           => get_post_meta( $thumb_id, '_wp_attachment_image_alt', true ) ?: $slot['topic'],
-			);
-			$use_existing = true;
+			$thumb_id  = get_post_thumbnail_id( $post_id );
+			$thumb_url = wp_get_attachment_url( $thumb_id );
+			if ( $thumb_url ) {
+				$fmt_now = (string) $slot['format'];
+				if ( in_array( $fmt_now, array( 'banner', 'poster', 'infographic', 'quote_card' ), true ) && class_exists( 'VMSAI_Card_Renderer' ) ) {
+					$src_path = get_attached_file( $thumb_id );
+					$up_dir   = wp_upload_dir();
+					$out_name = sanitize_title( mb_substr( (string) ( $data['title'] ?? $slot['topic'] ), 0, 50 ) ) . '-poster-' . wp_generate_password( 5, false, false ) . '.jpg';
+					$out_path = trailingslashit( $up_dir['path'] ) . $out_name;
+					$rendered = ( $src_path && file_exists( $src_path ) )
+						? VMSAI_Card_Renderer::render_poster( $src_path, array(
+							'headline' => (string) ( $data['title'] ?? $slot['topic'] ),
+							'subline'  => wp_trim_words( wp_strip_all_tags( $body ), 12 ),
+							'badge'    => strtoupper( (string) ( $slot['pillar'] ?: 'TRAVEL GUIDE' ) ),
+							'out_path' => $out_path,
+						) )
+						: '';
+					if ( $rendered && file_exists( $rendered ) ) {
+						$thumb_url = trailingslashit( $up_dir['url'] ) . basename( $rendered );
+					}
+				}
+				$image = array(
+					'attachment_id' => $thumb_id,
+					'url'           => VMSAI_Image_Engine::ensure_jpeg_url( $thumb_url, $thumb_id ),
+					'provider'      => 'original',
+					'alt'           => get_post_meta( $thumb_id, '_wp_attachment_image_alt', true ) ?: $slot['topic'],
+				);
+				$use_existing = true;
+			}
 		}
 
 		if ( ! $use_existing ) {
@@ -418,12 +439,15 @@ KEY WRITING ATTRIBUTES:
 			$image = vmsai()->image_engine()->create(
 				(string) ( $data['image_prompt'] ?? $slot['topic'] ),
 				array(
-					'channel' => $channel,
-					'format'  => (string) $slot['format'],
-					'topic'   => $slot['topic'],
-					'keyword' => $slot['keyword'],
-					'alt'     => $data['alt_text'] ?? '',
-					'prompt'  => $data['image_prompt'] ?? '',
+					'channel'       => $channel,
+					'format'        => (string) $slot['format'],
+					'topic'         => $slot['topic'],
+					'keyword'       => $slot['keyword'],
+					'alt'           => $data['alt_text'] ?? '',
+					'prompt'        => $data['image_prompt'] ?? '',
+					'card_headline' => in_array( (string) $slot['format'], array( 'banner', 'poster', 'infographic', 'quote_card' ), true ) ? (string) ( $data['title'] ?? $slot['topic'] ) : '',
+					'card_subline'  => in_array( (string) $slot['format'], array( 'banner', 'poster', 'infographic', 'quote_card' ), true ) ? wp_trim_words( wp_strip_all_tags( $body ), 12 ) : '',
+					'card_badge'    => strtoupper( (string) ( $slot['pillar'] ?: 'TRAVEL GUIDE' ) ),
 				)
 			);
 			VMSAI_Logger::debug( 'composer', "Image generation complete for slot #{$slot['id']} (Status: " . ( $image['ok'] ? 'OK' : 'Failed' ) . ")" );
@@ -610,19 +634,32 @@ KEY WRITING ATTRIBUTES:
 		$viral_score = min( 100, max( 0, (int) ( $data['viral_score'] ?? 0 ) ) );
 
 		$parent_id = 0;
+		$saved_ids = array();
+		$total_s   = max( 1, count( $slides ) );
+		$first_body = '';
 
 		foreach ( $slides as $i => $slide ) {
-			$image = vmsai()->image_engine()->create(
-				(string) ( $slide['image_prompt'] ?? $slot['topic'] ),
-				array(
-					'channel' => $channel,
-					'format'  => 'image',
-					'topic'   => $slot['topic'] . ' — Slide ' . ( $i + 1 ),
-					'keyword' => $slot['keyword'],
-					'alt'     => $slide['alt_text'] ?? '',
-					'prompt'  => $slide['image_prompt'] ?? '',
-				)
+			$slide_body = trim( (string) ( $slide['body'] ?? '' ) );
+			$img_args   = array(
+				'channel'       => $channel,
+				'format'        => 'carousel_slide',
+				'topic'         => $slot['topic'] . ' — Slide ' . ( $i + 1 ),
+				'keyword'       => $slot['keyword'],
+				'alt'           => $slide['alt_text'] ?? '',
+				'prompt'        => $slide['image_prompt'] ?? '',
+				'card_headline' => $slide_body ?: (string) $slot['topic'],
+				'card_badge'    => sprintf( 'SLIDE %02d / %02d', $i + 1, $total_s ),
 			);
+
+			$image = vmsai()->image_engine()->create( (string) ( $slide['image_prompt'] ?? $slot['topic'] ), $img_args );
+			if ( empty( $image['ok'] ) || empty( $image['url'] ) ) {
+				$img_args['prefer'] = 'pexels';
+				$image = vmsai()->image_engine()->create( (string) ( $slot['keyword'] ?: $slot['topic'] ), $img_args );
+			}
+			// Never save empty carousel slide rows — incomplete slides break IG/FB carousels.
+			if ( empty( $image['ok'] ) || empty( $image['url'] ) ) {
+				continue;
+			}
 
 			$row = array(
 				'plan_id'        => (int) $slot['id'],
@@ -630,47 +667,55 @@ KEY WRITING ATTRIBUTES:
 				'campaign_id'    => (int) $slot['campaign_id'],
 				'channel'        => $channel,
 				'format'         => 'carousel_slide',
-				'title'          => "Slide " . ($i+1),
-				'body'           => $slide['body'] ?? '',
+				'title'          => 'Slide ' . ( count( $saved_ids ) + 1 ),
+				'body'           => $slide_body,
 				'media_id'       => (int) ( $image['attachment_id'] ?? 0 ),
-				'media_url'      => $image['url'] ?? '',
+				'media_url'      => VMSAI_Image_Engine::ensure_jpeg_url( (string) $image['url'], (int) ( $image['attachment_id'] ?? 0 ) ),
 				'image_prompt'   => $slide['image_prompt'] ?? '',
 				'alt_text'       => (string) ( $image['alt'] ?? ( $slide['alt_text'] ?? '' ) ),
 				'seo_score'      => $seo_score,
 				'viral_score'    => $viral_score,
 				'text_provider'  => $result['provider'],
 				'image_provider' => $image['provider'] ?? '',
-				// initial_status(), not a hardcoded 'approved' — a carousel
-				// must respect the same autonomy/require_approval gate every
-				// other format goes through, or it silently skips review an
-				// operator explicitly turned on for that channel.
 				'status'         => self::initial_status( $channel ),
 				'scheduled_at'   => self::slot_timestamp( $slot ),
 			);
 
 			$id = self::save( $row );
-			if ( $i === 0 ) {
-				$parent_id = $id;
-				// Update the parent's body to include hashtags/cta from
-				// original data if needed. Uses $spec['hashtags'] (the
-				// channel's own cap, already in scope), not a hardcoded 5 —
-				// e.g. GBP's spec is 0 ("no hashtags, no emoji clutter").
-				$full_body = ( $slide['body'] ?? '' ) . "\n\n" . ( $data['cta'] ?? '' );
-				$post_id   = (int) ( $slot['post_id'] ?? 0 );
-				if ( $post_id && 'post' === get_post_type( $post_id ) ) {
-					$post_url = get_permalink( $post_id );
-					if ( $post_url && false === strpos( $full_body, $post_url ) ) {
-						if ( 'instagram' === $channel ) {
-							$full_body .= "\n\n🔗 Full Guide & Itinerary: Link in bio (" . $post_url . ")";
-						} else {
-							$full_body .= "\n\n🔗 Read Full Guide: " . $post_url;
-						}
+			if ( $id ) {
+				$saved_ids[] = $id;
+				if ( 0 === $parent_id ) {
+					$parent_id  = $id;
+					$first_body = $slide_body;
+				}
+			}
+		}
+
+		if ( count( $saved_ids ) < 2 ) {
+			if ( ! empty( $saved_ids ) ) {
+				global $wpdb;
+				$in = implode( ',', array_map( 'intval', $saved_ids ) );
+				$wpdb->query( "DELETE FROM " . VMSAI_Install::table( 'queue' ) . " WHERE id IN ($in)" );
+			}
+			return array( 'ok' => false, 'queue_id' => 0, 'error' => __( 'Carousel slide media generation produced fewer than 2 valid slides.', 'vm-social-ai-pro' ) );
+		}
+
+		if ( $parent_id > 0 ) {
+			$full_body = $first_body . "\n\n" . ( $data['cta'] ?? '' );
+			$post_id   = (int) ( $slot['post_id'] ?? 0 );
+			if ( $post_id && 'post' === get_post_type( $post_id ) ) {
+				$post_url = get_permalink( $post_id );
+				if ( $post_url && false === strpos( $full_body, $post_url ) ) {
+					if ( 'instagram' === $channel ) {
+						$full_body .= "\n\nFull Guide & Itinerary: Link in bio (" . $post_url . ')';
+					} else {
+						$full_body .= "\n\nRead Full Guide: " . $post_url;
 					}
 				}
-				$full_body .= "\n\n" . implode(' ', array_map(fn($h) => '#'.$h, self::normalise_hashtags($data['hashtags'] ?? [], (int) $spec['hashtags'])));
-				global $wpdb;
-				$wpdb->update( VMSAI_Install::table('queue'), array('body' => $full_body), array('id' => $id) );
 			}
+			$full_body .= "\n\n" . implode( ' ', array_map( fn( $h ) => '#' . $h, self::normalise_hashtags( $data['hashtags'] ?? array(), (int) $spec['hashtags'] ) ) );
+			global $wpdb;
+			$wpdb->update( VMSAI_Install::table( 'queue' ), array( 'body' => $full_body ), array( 'id' => $parent_id ) );
 		}
 
 		return array( 'ok' => true, 'queue_id' => $parent_id, 'error' => '' );
