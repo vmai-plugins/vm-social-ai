@@ -341,7 +341,12 @@ class VMSAI_Image_Engine {
 		// Apply branding BEFORE generating thumbnails so all sizes are branded.
 		$this->maybe_watermark( $upload['file'] );
 
-		wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $upload['file'] ) );
+		// Optimization: Social images do not require 6-8 intermediate theme thumbnails (-150x150, -300x200, etc.).
+		// Disabling sub-sizes saves ~75% disk space and prevents server upload bloat.
+		add_filter( 'intermediate_image_sizes_advanced', '__return_empty_array', 999 );
+		$attach_data = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
+		remove_filter( 'intermediate_image_sizes_advanced', '__return_empty_array', 999 );
+		wp_update_attachment_metadata( $attachment_id, $attach_data );
 		update_post_meta( $attachment_id, '_wp_attachment_image_alt', $this->seo_alt( $meta ) );
 		update_post_meta( $attachment_id, '_vmsai_provider', $provider );
 		update_post_meta( $attachment_id, '_vmsai_prompt', substr( (string) ( $meta['prompt'] ?? '' ), 0, 1000 ) );
